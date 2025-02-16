@@ -3,7 +3,7 @@ package test
 import (
 	"testing"
 
-	"github.com/o-ga09/langchain-go/internal/add"
+	"github.com/o-ga09/go-backend-template/internal/add"
 )
 
 func TestAdd(t *testing.T) {
