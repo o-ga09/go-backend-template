@@ -1,4 +1,4 @@
-package middleware
+package logger
 
 import (
 	"context"
@@ -7,7 +7,9 @@ import (
 	"os"
 
 	"cloud.google.com/go/logging"
-	"github.com/o-ga09/go-backend-template/internal/config"
+
+	"github.com/o-ga09/go-backend-template/pkg/constant"
+	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -50,7 +52,7 @@ func (h *traceHandler) WithGroup(g string) slog.Handler {
 }
 
 // logger 生成関数
-func Logger() *slog.Logger {
+func Logger(ctx context.Context) *slog.Logger {
 	replacer := func(groups []string, a slog.Attr) slog.Attr {
 		if a.Key == slog.MessageKey {
 			a.Key = "message"
@@ -67,7 +69,7 @@ func Logger() *slog.Logger {
 
 		return a
 	}
-	cfg, _ := config.New()
+	cfg := Ctx.GetCfgFromCtx(ctx)
 	projectID := cfg.ProjectID
 	h := traceHandler{slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: true, ReplaceAttr: replacer}), projectID}
 	newh := h.WithAttr([]slog.Attr{
@@ -79,4 +81,24 @@ func Logger() *slog.Logger {
 	logger := slog.New(newh)
 	slog.SetDefault(logger)
 	return logger
+}
+
+func Info(ctx context.Context, msg string, args ...any) {
+	allArgs := append([]any{"requestId", Ctx.GetRequestID(ctx)}, args...)
+	slog.Log(ctx, constant.SeverityInfo, msg, allArgs...)
+}
+
+func Error(ctx context.Context, msg string, args ...any) {
+	allArgs := append([]any{"requestId", Ctx.GetRequestID(ctx)}, args...)
+	slog.Log(ctx, constant.SeverityError, msg, allArgs...)
+}
+
+func Warn(ctx context.Context, msg string, args ...any) {
+	allArgs := append([]any{"requestId", Ctx.GetRequestID(ctx)}, args...)
+	slog.Log(ctx, constant.SeverityWarn, msg, allArgs...)
+}
+
+func Notice(ctx context.Context, msg string, args ...any) {
+	allArgs := append([]any{"requestId", Ctx.GetRequestID(ctx)}, args...)
+	slog.Log(ctx, constant.SeverityNotice, msg, allArgs...)
 }

@@ -1,48 +1,77 @@
 package server
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/o-ga09/go-backend-template/internal/config"
-	"github.com/o-ga09/go-backend-template/internal/middleware"
-	"github.com/o-ga09/go-backend-template/internal/service"
+	"context"
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/labstack/echo"
+	"github.com/labstack/echo/middleware"
+	"github.com/o-ga09/go-backend-template/internal/router"
+	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
+	"github.com/o-ga09/go-backend-template/pkg/logger"
 )
 
-func NewServer() (*gin.Engine, error) {
-	r := gin.New()
-	cfg, _ := config.New()
-	if cfg.Env == "PROD" {
-		gin.SetMode(gin.ReleaseMode)
+type Server struct {
+	Port   string
+	engine *echo.Echo
+}
+
+func New(ctx context.Context) *Server {
+	cfg := Ctx.GetCfgFromCtx(ctx)
+	return &Server{
+		Port:   cfg.Port,
+		engine: echo.New(),
+	}
+}
+
+func (s *Server) Run(ctx context.Context) error {
+	// ミドルウェアの設定
+	s.engine.Use(middleware.Recover())
+	s.engine.Use(AddID())
+	s.engine.Use(AddTime())
+	s.engine.Use(RequestLogger())
+	s.engine.Use(SetDB())
+	s.engine.Use(WithTimeout())
+	s.engine.Use(CORS())
+	s.engine.Use(middleware.BodyLimit("10M"))
+	s.engine.Use(middleware.Gzip())
+
+	// ルーティングの設定
+	apiRoot := s.engine.Group("/api")
+	router.SetupApplicationRoute(apiRoot)
+	router.SetupSystemRoute(apiRoot)
+	// サーバーの起動
+	srv := &http.Server{
+		Addr:    s.Port,
+		Handler: s.engine,
 	}
 
-	// ロガー設定
-	logger := middleware.Logger()
-	httpLogger := middleware.RequestLogger(logger)
+	// サーバーの起動
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error(ctx, fmt.Sprintf("Failed to listen and serve: %v", err))
+		}
+	}()
 
-	// CORS設定
-	cors := middleware.CORS()
+	logger.Info(ctx, fmt.Sprintf("Server is running on %s", s.Port))
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	logger.Info(ctx, "graceful shutdown")
 
-	// リクエストタイムアウト設定
-	withCtx := middleware.WithTimeout()
+	// サーバーのタイムアウト設定
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 
-	// リクエストID付与
-	withReqId := middleware.AddID()
-
-	// ミドルウェア設定
-	r.Use(withReqId)
-	r.Use(withCtx)
-	r.Use(cors)
-	r.Use(httpLogger)
-
-	// ヘルスチェック
-	v1 := r.Group("/v1")
-	{
-		systemHandler := service.SystemHandler{}
-		v1.GET("/health", systemHandler.Health)
-
-		// ユーザー一覧取得
-		userHandler := service.UserHandler{}
-		v1.GET("/users", userHandler.Find)
+	// サーバーのシャットダウン
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Error(ctx, fmt.Sprintf("failed to shutdown server: %v", err))
+		return err
 	}
-
-	return r, nil
+	return nil
 }
