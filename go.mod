@@ -5,12 +5,15 @@ go 1.25.5
 require (
 	cloud.google.com/go/logging v1.13.0
 	github.com/caarlos0/env v3.5.0+incompatible
+	github.com/getsentry/sentry-go v0.40.0
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
 	github.com/labstack/echo v3.3.10+incompatible
 	github.com/newmo-oss/ergo v0.1.0
 	github.com/rubenv/sql-migrate v1.8.1
 	go.opentelemetry.io/otel/trace v1.34.0
+	gorm.io/driver/mysql v1.6.0
+	gorm.io/gorm v1.31.1
 )
 
 require (
@@ -28,6 +31,8 @@ require (
 	github.com/google/s2a-go v0.1.8 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.0 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

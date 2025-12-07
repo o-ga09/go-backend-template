@@ -1,5 +1,5 @@
 #API用コンテナに含めるバイナリを作成するコンテナ
-FROM golang:1.24-bullseye as deploy-builder
+FROM golang:1.25-bullseye AS deploy-builder
 
 WORKDIR /app
 
@@ -11,7 +11,7 @@ RUN go build -trimpath -ldflags "-w -s" -o main ./cmd/main.go
 
 #-----------------------------------------------
 #API デプロイ用コンアテナ
-FROM ubuntu:22.04 as deploy
+FROM ubuntu:22.04 AS deploy
 
 RUN apt update
 RUN apt-get install -y ca-certificates openssl
@@ -24,7 +24,7 @@ CMD ["./main"]
 
 #-----------------------------------------------
 #ローカル開発環境で利用するホットリロード環境
-FROM golang:1.24 as dev
+FROM golang:1.25 AS dev
 
 WORKDIR /app
 

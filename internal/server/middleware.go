@@ -7,6 +7,7 @@ import (
 
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
+	"github.com/o-ga09/go-backend-template/internal/infra/database/mysql"
 	"github.com/o-ga09/go-backend-template/pkg/constant"
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
 	"github.com/o-ga09/go-backend-template/pkg/uuid"
@@ -101,6 +102,14 @@ func CORS() echo.MiddlewareFunc {
 func SetDB() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			ctx := c.Request().Context()
+			db, err := mysql.Connect(ctx)
+			if err != nil {
+				slog.Log(ctx, constant.SeverityError, "DB接続に失敗しました", "error", err.Error())
+				return err
+			}
+			ctx = Ctx.SetDB(ctx, db)
+			c.SetRequest(c.Request().WithContext(ctx))
 			return next(c)
 		}
 	}
