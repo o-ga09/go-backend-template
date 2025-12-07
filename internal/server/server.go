@@ -32,7 +32,7 @@ func New(ctx context.Context) *Server {
 func (s *Server) Run(ctx context.Context) error {
 	// ミドルウェアの設定
 	s.engine.Use(middleware.Recover())
-	s.engine.Use(AddID())
+	s.engine.Use(AddID(ctx))
 	s.engine.Use(AddTime())
 	s.engine.Use(RequestLogger())
 	s.engine.Use(SetDB())
@@ -46,8 +46,9 @@ func (s *Server) Run(ctx context.Context) error {
 	router.SetupApplicationRoute(apiRoot)
 	router.SetupSystemRoute(apiRoot)
 	// サーバーの起動
+	port := fmt.Sprintf(":%s", s.Port)
 	srv := &http.Server{
-		Addr:    s.Port,
+		Addr:    port,
 		Handler: s.engine,
 	}
 

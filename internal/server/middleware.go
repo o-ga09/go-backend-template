@@ -19,10 +19,10 @@ type RequestInfo struct {
 	elapsed                                           time.Duration
 }
 
-func AddID() echo.MiddlewareFunc {
+func AddID(ctx context.Context) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			ctx := Ctx.SetRequestID(c.Request().Context(), uuid.GenerateID())
+			ctx := Ctx.SetRequestID(ctx, uuid.GenerateID())
 			c.SetRequest(c.Request().WithContext(ctx))
 			return next(c)
 		}

@@ -6,7 +6,9 @@ import (
 
 	"github.com/o-ga09/go-backend-template/internal/server"
 	"github.com/o-ga09/go-backend-template/pkg/config"
+	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
 	"github.com/o-ga09/go-backend-template/pkg/logger"
+	"github.com/o-ga09/go-backend-template/pkg/uuid"
 )
 
 func main() {
@@ -15,6 +17,7 @@ func main() {
 		log.Fatal(err)
 	}
 
+	ctx = Ctx.SetRequestID(ctx, uuid.GenerateID())
 	logger.Logger(ctx)
 
 	srv := server.New(ctx)
