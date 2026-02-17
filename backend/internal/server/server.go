@@ -40,6 +40,7 @@ func (s *Server) Run(ctx context.Context) error {
 	s.engine.Use(CORS())
 	s.engine.Use(middleware.BodyLimit("10M"))
 	s.engine.Use(middleware.Gzip())
+	s.engine.Use(ErrorHandler())
 
 	// ルーティングの設定
 	apiRoot := s.engine.Group("/api")

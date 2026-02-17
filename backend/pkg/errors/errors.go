@@ -9,6 +9,7 @@ import (
 )
 
 type ErrType string
+type ErrCode ergo.Code
 
 var (
 	ErrTypeUnAuthorized    = ergo.NewSentinel("unauthorized")
@@ -17,6 +18,15 @@ var (
 	ErrTypeConflict        = ergo.NewSentinel("conflict")
 	ErrTypeNotFound        = ergo.NewSentinel("not found")
 	ErrTypeCritical        = ergo.NewSentinel("critical error")
+)
+
+var (
+	ErrCodeInvalidArgument = ergo.NewCode("422", "InvalidArgument")
+	ErrCodeUnAuthorized    = ergo.NewCode("401", "UnAuthorized")
+	ErrCodeUnAuthorization = ergo.NewCode("403", "UnAuthorization")
+	ErrCodeNotFound        = ergo.NewCode("404", "NotFound")
+	ErrCodeConflict        = ergo.NewCode("409", "Conflict")
+	ErrCodeSystem          = ergo.NewCode("500", "SystemError")
 )
 
 // TODO: 適宜プロジェクトごとに修正すること
@@ -93,6 +103,7 @@ func GetCode(err error) ergo.Code {
 
 func MakeAuthorizationError(ctx context.Context, msg string) error {
 	err := ergo.Wrap(ErrUnauthorized, msg)
+	err = ergo.WithCode(err, ErrCodeUnAuthorized)
 	st := ergo.StackTraceOf(err)
 	logger.Warn(ctx, err.Error(), "callStack", st)
 	return err
@@ -100,6 +111,7 @@ func MakeAuthorizationError(ctx context.Context, msg string) error {
 
 func MakeAuthorizedError(ctx context.Context, msg string) error {
 	err := ergo.Wrap(ErrAuthorized, msg)
+	err = ergo.WithCode(err, ErrCodeUnAuthorization)
 	st := ergo.StackTraceOf(err)
 	logger.Warn(ctx, err.Error(), "callStack", st)
 	return err
@@ -107,6 +119,7 @@ func MakeAuthorizedError(ctx context.Context, msg string) error {
 
 func MakeBusinessError(ctx context.Context, msg string) error {
 	err := ergo.Wrap(ErrTypeBussiness, msg)
+	err = ergo.WithCode(err, ErrCodeInvalidArgument)
 	st := ergo.StackTraceOf(err)
 	logger.Info(ctx, err.Error(), "callStack", st)
 	return err
@@ -114,6 +127,7 @@ func MakeBusinessError(ctx context.Context, msg string) error {
 
 func MakeConflictError(ctx context.Context, msg string) error {
 	err := ergo.Wrap(ErrTypeConflict, msg)
+	err = ergo.WithCode(err, ErrCodeConflict)
 	st := ergo.StackTraceOf(err)
 	logger.Warn(ctx, err.Error(), "callStack", st)
 	return err
@@ -121,6 +135,7 @@ func MakeConflictError(ctx context.Context, msg string) error {
 
 func MakeNotFoundError(ctx context.Context, msg string) error {
 	err := ergo.Wrap(ErrTypeNotFound, msg)
+	err = ergo.WithCode(err, ErrCodeNotFound)
 	st := ergo.StackTraceOf(err)
 	logger.Warn(ctx, err.Error(), "callStack", st)
 	return err
@@ -130,6 +145,7 @@ func MakeSystemError(ctx context.Context, err error) error {
 	if !IsWrapped(err) {
 		err = ergo.Wrap(ErrTypeCritical, err.Error())
 	}
+	err = ergo.WithCode(err, ErrCodeSystem)
 	st := ergo.StackTraceOf(err)
 	logger.Error(ctx, err.Error(), "callStack", st)
 	return err

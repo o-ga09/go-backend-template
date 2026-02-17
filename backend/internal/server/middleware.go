@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/labstack/echo"
@@ -10,6 +11,7 @@ import (
 	"github.com/o-ga09/go-backend-template/internal/infra/database/mysql"
 	"github.com/o-ga09/go-backend-template/pkg/constant"
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
+	"github.com/o-ga09/go-backend-template/pkg/errors"
 	"github.com/o-ga09/go-backend-template/pkg/uuid"
 )
 
@@ -122,5 +124,38 @@ func AddTime() echo.MiddlewareFunc {
 			c.SetRequest(c.Request().WithContext(ctx))
 			return next(c)
 		}
+	}
+}
+
+func ErrorHandler() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			err := next(c)
+			if err != nil {
+				status, message := ErrCodeToStatusAndMessage(err)
+				return c.JSON(status, map[string]interface{}{
+					"error": message,
+				})
+			}
+			return nil
+		}
+	}
+}
+
+func ErrCodeToStatusAndMessage(err error) (int, string) {
+	code := errors.GetCode(err)
+	switch code {
+	case errors.ErrCodeUnAuthorization:
+		return http.StatusForbidden, code.Message()
+	case errors.ErrCodeInvalidArgument:
+		return http.StatusBadRequest, code.Message()
+	case errors.ErrCodeConflict:
+		return http.StatusConflict, code.Message()
+	case errors.ErrCodeNotFound:
+		return http.StatusNotFound, code.Message()
+	case errors.ErrCodeSystem:
+		return http.StatusInternalServerError, code.Message()
+	default:
+		return http.StatusInternalServerError, "Internal Server Error"
 	}
 }
