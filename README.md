@@ -27,26 +27,51 @@ This is a template repository for implementing web applications using Go and Nex
    git clone  <repository_url>
    cd go-template-api
    ``` 
-2. Set up the backend:  
+2. Set up the backend:
+
+   ```bash
+   cd backend
+
+   # Start MySQL + the API server (hot reload) with Docker Compose.
+   # Dev credentials/ports are defined in backend/compose.yml.
+   docker compose up --build
+
+   # In another shell, run DB migrations against the MySQL container
+   # (connecting from the host, so use localhost instead of the "db" service name)
+   export DATABASE_URL="user:P@ssw0rd@tcp(localhost:3306)/test?parseTime=true"
+   go run cmd/migrate/main.go -command up
+   go run cmd/migrate/main.go -command seed   # optional: load sample data
+   ```
+
+   The API server listens on `http://localhost:8080`.
+
 3. Set up the frontend:
-4. Run the application using Docker Compose:
 
    ```bash
-   docker-compose up --build
+   cd frontend
+   # Create a .env file with at least:
+   #   NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+   #   GOOGLE_CLIENT_ID=<your-google-oauth-client-id>
+   #   GOOGLE_CLIENT_SECRET=<your-google-oauth-client-secret>
+   #   NEXTAUTH_SECRET=<random-secret>
+
+   pnpm install
+   pnpm dev
    ```
-5. Access the application at `http://localhost:3000`.
-6. Stop the application:
+
+4. Access the application at `http://localhost:3000`.
+5. Stop the backend:
 
    ```bash
-   docker-compose down
+   cd backend
+   docker compose down
    ```
+
 ### Configuration
 
-- Update environment variables in the `.env` files for both backend and frontend as needed.
-- Modify database connection settings in the backend configuration.
-- Customize authentication providers in the frontend configuration.
-- Adjust Docker Compose settings for your development environment.
-- Refer to the documentation for more detailed configuration options.
+- Local backend dev credentials/ports are defined directly in `backend/compose.yml`. For non-Docker or deployed environments, set `ENV`, `PORT`, `DATABASE_URL`, `PROJECTID` (see `pkg/config/config.go`).
+- Customize authentication providers (Google OAuth client ID/secret, `NEXTAUTH_SECRET`) in `frontend/.env`.
+- Coding conventions for this template live under `.claude/rules/` (architecture, error handling, testing, etc.) and `.github/instructions/`.
 - Feel free to contribute to this template by submitting issues or pull requests.
 - Happy coding!
 

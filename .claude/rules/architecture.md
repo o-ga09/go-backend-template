@@ -1,6 +1,6 @@
 # アーキテクチャルール
 
-対象: `backend/`（Go / Echo / GORM）。クライアント（React Native / Expo）は `mobile.md`。
+対象: `backend/`（Go / Echo / GORM）。クライアント（Next.js）は `frontend.md`。
 
 技術選定の根拠は `docs/decisions/ADR-0006`（技術スタック）・`ADR-0007`（保存方式・インフラ）。
 **本ルールは実装の作法を決めるものであり、ADR の決定を上書きしない。**
