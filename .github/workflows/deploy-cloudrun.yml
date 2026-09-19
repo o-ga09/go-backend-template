@@ -1,9 +1,7 @@
 name: Deploy to Cloud Run
 
 on:
-  push:
-    branches-ignore:
-      - main
+  workflow_dispatch:
 
 env:
   PROJECT_ID: <PROJECT_ID>
