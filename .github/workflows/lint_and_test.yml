@@ -33,6 +33,7 @@ jobs:
           go test ./... -coverprofile=coverage.out
       - name: create report
         uses: k1LoW/octocov-action@v0
+        continue-on-error: true
         with:
           config: backend/.octocov.yml
   golangci-lint:
