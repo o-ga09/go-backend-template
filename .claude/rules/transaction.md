@@ -1,87 +1,85 @@
 # トランザクションルール
 
-対象: `backend/`（Go / GORM / TiDB Serverless）。
+対象: `backend/`（Go / GORM / MySQL）。
 
 ## 基本方針
 
 - 複数テーブルへの書き込みを含む処理は必ず `ITransactionManager.RunInTx` でラップする
 - 読み取り専用操作（SELECT）はトランザクション外で実行してよい
 - バリデーションと入力チェックはトランザクション開始前に全件完了させる
-- **LLM 呼び出しをトランザクション内に入れない**（下記）
+- **外部API呼び出し（決済・通知・KMS等）をトランザクション内に入れない**（下記）
 
 ## トランザクションを呼ぶ場所（新規コード）🔴
 
 `architecture.md`「基本方針：レイヤードアーキテクチャ」と対応する。
 
 - **シンプルな CRUD（usecase を作らない場合）は、ハンドラが `ITransactionManager.RunInTx` を直接呼ぶ。** usecase 層を作らない方針と整合させる
-- **複雑なオーケストレーション（暗号化・LLM呼び出しを伴う既存の `internal/service/` など）は、従来通り service 層がトランザクションを保持してよい**（本方針以前からの例外）
-- どちらの場合も、**LLM呼び出し・KMS呼び出しをトランザクション内に置かない**のは変わらず絶対（下記）
+- **複雑なオーケストレーション（外部API呼び出し・暗号化などを伴い usecase 層を挟む場合）は、service 層がトランザクションを保持する**
+- どちらの場合も、**外部API呼び出し・暗号化/復号処理をトランザクション内に置かない**のは変わらず絶対（下記）
 
-## LLM 呼び出しとトランザクションを重ねない 🔴
+## 外部API呼び出しとトランザクションを重ねない 🔴
 
-下書き生成・メモリ要約は数秒〜数十秒かかる（NFR-01-04：30秒以内）。
-**この間トランザクションを開いたままにすると、TiDB の接続を長時間占有し、Cloud Run のスケール時に接続が枯渇する。**
+決済API・通知送信・KMSでの暗号化など、外部サービスへの呼び出しはレイテンシが読めない。
+**この間トランザクションを開いたままにすると、DB接続を長時間占有し、スケール時に接続が枯渇する。**
 
 ```go
-// 誤: LLM 呼び出しをトランザクションで囲む
+// 誤: 外部API呼び出しをトランザクションで囲む
 return s.txManager.RunInTx(ctx, func(txCtx context.Context) error {
-    draft, err := s.llm.GenerateDraft(txCtx, materials)  // 30秒間トランザクションを保持
+    result, err := s.paymentClient.Charge(txCtx, req)  // 応答時間が読めない呼び出しを保持
     ...
 })
 
-// 正: 生成 → その後に短いトランザクションで書き込む
-draft, err := s.llm.GenerateDraft(ctx, materials)
+// 正: 呼び出し → その後に短いトランザクションで書き込む
+result, err := s.paymentClient.Charge(ctx, req)
 if err != nil {
     return errors.Wrap(ctx, err)
 }
 return s.txManager.RunInTx(ctx, func(txCtx context.Context) error {
-    if err := s.draftRepo.Save(txCtx, draft); err != nil {
+    if err := s.orderRepo.Save(txCtx, order); err != nil {
         return errors.Wrap(txCtx, err)
     }
-    return s.memoryRepo.Update(txCtx, memory)
+    return s.paymentRepo.Save(txCtx, result)
 })
 ```
 
-暗号化（`internal/crypto/`、Cloud KMS 呼び出し）も同様にトランザクション外で行う。
+暗号化（`internal/crypto/` 等、KMS呼び出しを伴うもの）も同様にトランザクション外で行う。
 
 ## インターフェースと実装の場所
 
-- `ITransactionManager` は `internal/infra/database/transaction/transaction.go` で定義する
+- `ITransactionManager` は `internal/database/transaction.go` で定義する（`package database`。`logger.go` と同じ階層。DBエンジン非依存の共通実装で、`internal/database/mysql/` と並ぶ）
 - `TransactionManager` はステートレスで、`*gorm.DB` は `ctx` から取得する（フィールドに持たない）
-- モックは `moq` で自動生成し、`internal/infra/database/transaction/mock/` に置く
+- モックは `moq` で自動生成し、`internal/database/mock/` に置く
 - 手書きスタブ禁止
 
 ## コンストラクタでの注入
 
 ```go
-func NewSessionService(
-    sessionRepo domainsession.ISessionRepository,
-    answerRepo  domainanswer.IAnswerRepository,
-    draftRepo   domaindraft.IDraftRepository,
-    memoryRepo  domainmemory.IMemoryRepository,
-    txManager   transaction.ITransactionManager,
-) *SessionService { ... }
+func NewCartService(
+    cartRepo  domaincart.ICartRepository,
+    orderRepo domainorder.IOrderRepository,
+    txManager transaction.ITransactionManager,
+) *CartService { ... }
 ```
 
 ## RunInTx の実装パターン
 
 ```go
-func (s *SessionService) Complete(ctx context.Context, sessionID string) error {
+func (s *CartService) Checkout(ctx context.Context, cartID string) error {
     // バリデーション（トランザクション外）
-    sess, err := s.sessionRepo.FindByID(ctx, sessionID)
+    cart, err := s.cartRepo.FindByID(ctx, cartID)
     if err != nil {
         return errors.Wrap(ctx, err)
     }
-    if err := sess.CanComplete(); err != nil {
-        return errors.MakeBusinessError(ctx, "session cannot be completed")
+    if err := cart.CanCheckout(); err != nil {
+        return errors.MakeBusinessError(ctx, "cart cannot be checked out")
     }
 
     // DB書き込み（トランザクション内）
     return s.txManager.RunInTx(ctx, func(txCtx context.Context) error {
-        if err := s.sessionRepo.Complete(txCtx, sess); err != nil {
+        if err := s.orderRepo.Create(txCtx, order.FromCart(cart)); err != nil {
             return errors.Wrap(txCtx, err)
         }
-        return s.memoryRepo.Update(txCtx, memory)
+        return s.cartRepo.Clear(txCtx, cartID)
     })
 }
 ```
@@ -89,13 +87,13 @@ func (s *SessionService) Complete(ctx context.Context, sessionID string) error {
 クロージャ外に結果を持ち出す場合は外側の変数を使う。
 
 ```go
-var draftID string
+var orderID string
 err := s.txManager.RunInTx(ctx, func(txCtx context.Context) error {
-    d := &draft.Draft{...}
-    if err := s.draftRepo.Create(txCtx, d); err != nil {
+    o := &order.Order{...}
+    if err := s.orderRepo.Create(txCtx, o); err != nil {
         return errors.Wrap(txCtx, err)
     }
-    draftID = d.ID
+    orderID = o.ID
     return nil
 })
 ```
@@ -125,11 +123,11 @@ func (h *xxxHandler) Update(c echo.Context) error {
 }
 ```
 
-## TiDB 固有の注意
+## スケールとコネクションの注意
 
-- TiDB は楽観的／悲観的トランザクションの挙動が MySQL と完全一致しない。**長時間トランザクション・大量行ロックを避ける**
-- 同期の競合解決は last-write-wins でよい（`ADR-0007`：単一ユーザー・実質単一デバイス利用を想定）。悲観ロックで解決しようとしない
-- Cloud Run（GCP）→ TiDB Cloud（AWS）は**クロスクラウド接続**でレイテンシが乗る。トランザクション内の往復回数を最小にする
+- Cloud Run はスケール0から起動するため、DB接続が急増しうる（`architecture.md`「設定・初期化のルール」）。**長時間トランザクション・大量行ロックは接続枯渇に直結するため避ける**
+- 同時実行下での競合解決は楽観ロック（`Version`チェック。`architecture.md`「domain＝DBモデル・BaseModel・楽観ロック」）に委ねる。悲観ロックはよほどの理由がない限り使わない
+- トランザクション内の往復回数（クエリ発行回数）を最小にする
 
 ## 禁止事項
 
@@ -137,8 +135,8 @@ func (h *xxxHandler) Update(c echo.Context) error {
 - `pkg/errors` 以外のエラーパッケージを使わない
 - 手書きスタブでのモック（`moq` 生成を使う）
 - バリデーションをトランザクション内に混在させない
-- **LLM 呼び出し・KMS 呼び出しをトランザクション内に置かない**
-- **GORM の `AutoMigrate` を使わない。** スキーマの正は `db/migrations/`（`sql-migrate`）
+- **外部API呼び出し・暗号化/復号処理をトランザクション内に置かない**
+- **GORM の `AutoMigrate` を使わない。** スキーマの正は `db/migrations/`（`sql-migrate`。`cmd/migrate`）
 - **楽観ロック（`version`チェック）をアプリケーションコードで手書きしない。** GORM プラグインに委ねる（`architecture.md`「domain＝DBモデル・BaseModel・楽観ロック」）
 
 ## テストでのモック利用
@@ -149,11 +147,11 @@ txMock := &transactionmock.ITransactionManagerMock{
         return fn(ctx)  // テストでは fn をそのまま呼ぶ（トランザクションなし）
     },
 }
-svc := service.NewSessionService(sessionRepo, answerRepo, draftRepo, memoryRepo, txMock)
+svc := service.NewCartService(cartRepo, orderRepo, txMock)
 ```
 
 ## トランザクションが不要なケース
 
-- 単一テーブルへの書き込みのみ（**回答の1問ずつの保存はこれに当たる**。NFR-02-02：設問ごとに確定時点で永続化する）
+- 単一テーブルへの書き込みのみ
 - 読み取りのみ
-- 外部 API 呼び出し（Anthropic / Cloud KMS / 運用通知）
+- 外部API呼び出し単体（決済・通知送信など、DB書き込みを伴わないもの）
