@@ -72,6 +72,7 @@ This is a template repository for implementing web applications using Go and Nex
 - Local backend dev credentials/ports are defined directly in `backend/compose.yml`. For non-Docker or deployed environments, set `ENV`, `PORT`, `DATABASE_URL`, `PROJECTID` (see `pkg/config/config.go`).
 - Customize authentication providers (Google OAuth client ID/secret, `NEXTAUTH_SECRET`) in `frontend/.env`.
 - Coding conventions for this template live under `.claude/rules/` (architecture, error handling, testing, etc.) and `.github/instructions/`.
+- `.claude/` is the source of truth for skills, hooks, and agents; `.github/skills` and `.agents` are symlinks into it.
 - Feel free to contribute to this template by submitting issues or pull requests.
 - Happy coding!
 
