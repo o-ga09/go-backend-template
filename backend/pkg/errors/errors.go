@@ -58,6 +58,10 @@ var (
 	ErrForeignKeyConstraint   = ergo.New("foreign key constraint error")
 	ErrUniqueConstraint       = ergo.New("unique constraint error")
 
+	// セッションエラー
+	ErrInvalidSession = ergo.NewSentinel("invalid session")
+	ErrSessionExpired = ergo.NewSentinel("session expired")
+
 	// 画像エラー
 	ErrInvalidImageType  = ergo.New("ファイルの種類が不正です。")
 	ErrFailedImageName   = ergo.New("ファイル名の生成に失敗しました。")
@@ -93,6 +97,29 @@ func Is(err error, target error) bool {
 	return errors.Is(err, target)
 }
 
+// Wrap は詳細不明な下位レイヤーのエラー(DBドライバ・リポジトリが返す生のエラー等)
+// にスタックトレースを付与して伝搬する。ログはこの関数の内部で一度だけ出力する
+// (error-handling.md「ラップのみ: 詳細不明の外部エラーはerrors.Wrap(ctx, err)で
+// ラップする」)。
+//
+// 既にMake*Error/Wrap済みのエラー(IsWrapped(err)がtrue)はそのまま返す
+// (「一度ラップしたエラーは再ラップしない」ため、二重ログを防ぐ)。
+// このWrapはエラーコードを付与しない。呼び出し元が特定のHTTPステータスに
+// 変換したい場合は、事前にerrors.Is(err, ErrXxx)で判別し対応するMake*Errorを
+// 使うこと。コード未設定のままErrCodeToStatusAndMessageに渡ると500として扱われる。
+func Wrap(ctx context.Context, err error) error {
+	if err == nil {
+		return nil
+	}
+	if IsWrapped(err) {
+		return err
+	}
+	wrapped := ergo.Wrap(err, err.Error())
+	st := ergo.StackTraceOf(wrapped)
+	logger.Error(ctx, wrapped.Error(), "callStack", st)
+	return wrapped
+}
+
 func GetMessage(err error) string {
 	return err.Error()
 }
@@ -101,17 +128,19 @@ func GetCode(err error) ergo.Code {
 	return ergo.CodeOf(err)
 }
 
+// MakeAuthorizationError は認可失敗(権限不足。HTTP 403相当)のエラーを生成する。
 func MakeAuthorizationError(ctx context.Context, msg string) error {
 	err := ergo.Wrap(ErrUnauthorized, msg)
-	err = ergo.WithCode(err, ErrCodeUnAuthorized)
+	err = ergo.WithCode(err, ErrCodeUnAuthorization)
 	st := ergo.StackTraceOf(err)
 	logger.Warn(ctx, err.Error(), "callStack", st)
 	return err
 }
 
+// MakeAuthorizedError は認証失敗(トークン無効など。HTTP 401相当)のエラーを生成する。
 func MakeAuthorizedError(ctx context.Context, msg string) error {
 	err := ergo.Wrap(ErrAuthorized, msg)
-	err = ergo.WithCode(err, ErrCodeUnAuthorization)
+	err = ergo.WithCode(err, ErrCodeUnAuthorized)
 	st := ergo.StackTraceOf(err)
 	logger.Warn(ctx, err.Error(), "callStack", st)
 	return err

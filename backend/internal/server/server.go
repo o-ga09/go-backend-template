@@ -11,10 +11,17 @@ import (
 
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
+
+	"github.com/o-ga09/go-backend-template/internal/database/mysql"
+	"github.com/o-ga09/go-backend-template/internal/handler"
 	"github.com/o-ga09/go-backend-template/internal/router"
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
 	"github.com/o-ga09/go-backend-template/pkg/logger"
+	"github.com/o-ga09/go-backend-template/pkg/session"
 )
+
+// sessionTTL はバックエンド発行セッションCookieの有効期間(backend/docs/auth.md参照)。
+const sessionTTL = 7 * 24 * time.Hour
 
 type Server struct {
 	Port   string
@@ -30,6 +37,14 @@ func New(ctx context.Context) *Server {
 }
 
 func (s *Server) Run(ctx context.Context) error {
+	cfg := Ctx.GetCfgFromCtx(ctx)
+	sessionMgr := session.NewManager(cfg.SessionSecret, sessionTTL)
+
+	// 依存の組み立て(コンストラクタで注入。architecture.md「依存注入のルール」)
+	userRepo := mysql.NewUserRepository()
+	userHandler := handler.NewUserHandler(userRepo, sessionMgr)
+	authHandler := handler.NewAuthHandler(userRepo)
+
 	// ミドルウェアの設定
 	s.engine.Use(middleware.Recover())
 	s.engine.Use(AddID(ctx))
@@ -37,14 +52,15 @@ func (s *Server) Run(ctx context.Context) error {
 	s.engine.Use(RequestLogger())
 	s.engine.Use(SetDB())
 	s.engine.Use(WithTimeout())
-	s.engine.Use(CORS())
+	s.engine.Use(CORS(ctx))
+	s.engine.Use(Authenticate(sessionMgr))
 	s.engine.Use(middleware.BodyLimit("10M"))
 	s.engine.Use(middleware.Gzip())
 	s.engine.Use(ErrorHandler())
 
 	// ルーティングの設定
 	apiRoot := s.engine.Group("/api")
-	router.SetupApplicationRoute(apiRoot)
+	router.SetupApplicationRoute(apiRoot, userHandler, authHandler)
 	router.SetupSystemRoute(apiRoot)
 	// サーバーの起動
 	port := fmt.Sprintf(":%s", s.Port)

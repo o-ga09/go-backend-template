@@ -11,10 +11,18 @@ import (
 type RequestId string
 type RequestTime string
 type DB string
+type UserID string
 
 const RequestIDKey RequestId = "requestId"
 const RequestTimeKey RequestTime = "requestTime"
 const DBKey DB = "db"
+
+// UserIDKey はAuthenticateミドルウェアが検証したセッションの持ち主のユーザーIDを
+// 格納するcontextキー。認証情報(トークン・パスワード等)や個人情報(メールアドレス等)
+// は格納しない。値が入っていること自体を「認証済みの証明」として扱わず、
+// 権限判定が必要な箇所ではドメイン層の判定関数(例: user.IsOwnedBy)に明示的に渡す
+// (context-propagation.md参照)。
+const UserIDKey UserID = "userId"
 
 func GetRequestID(ctx context.Context) string {
 	return ctx.Value(RequestIDKey).(string)
@@ -50,4 +58,20 @@ func GetDBFromCtx(ctx context.Context) *gorm.DB {
 		return nil
 	}
 	return db
+}
+
+// SetUserID はセッション検証済みのユーザーIDをcontextに格納する。
+func SetUserID(ctx context.Context, userID string) context.Context {
+	return context.WithValue(ctx, UserIDKey, userID)
+}
+
+// GetUserID はcontextからユーザーIDを取得する。未ログイン(値未設定)の場合は
+// 空文字列を返す(RequestIDと異なりpanicしない。未認証リクエストが通常経路として
+// 存在するため)。
+func GetUserID(ctx context.Context) string {
+	userID, ok := ctx.Value(UserIDKey).(string)
+	if !ok {
+		return ""
+	}
+	return userID
 }

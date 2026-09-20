@@ -12,6 +12,7 @@ import (
 	"github.com/o-ga09/go-backend-template/pkg/constant"
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
 	"github.com/o-ga09/go-backend-template/pkg/errors"
+	"github.com/o-ga09/go-backend-template/pkg/session"
 	"github.com/o-ga09/go-backend-template/pkg/uuid"
 )
 
@@ -87,18 +88,46 @@ func (r *RequestInfo) LogValue() slog.Value {
 	)
 }
 
-func CORS() echo.MiddlewareFunc {
+// CORS はcrossOriginでのCookie送信(credentials: 'include')を許可するCORS設定。
+// フロントエンド(Next.js)はセッションCookieを使うため、ワイルドカードオリジン
+// (AllowOrigins: []string{"*"})とAllowCredentials: trueの組み合わせは
+// Fetch仕様上ブラウザに拒否される。特定オリジン(pkg/config.Config.FrontendOrigin)
+// のみを許可する。
+func CORS(ctx context.Context) echo.MiddlewareFunc {
+	cfg := Ctx.GetCfgFromCtx(ctx)
 	return middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"},
+		AllowOrigins: []string{cfg.FrontendOrigin},
 		AllowMethods: []string{
 			echo.POST,
 			echo.GET,
 			echo.OPTIONS,
 		},
 		AllowHeaders:     []string{"Content-Type"},
-		AllowCredentials: false,
+		AllowCredentials: true,
 		MaxAge:           86400, // 24 hours in seconds
 	})
+}
+
+// Authenticate はセッションCookie(pkg/session.CookieName)を検証し、有効であれば
+// ユーザーIDのみをcontextに格納する(pkg/context.SetUserID)。
+// Cookieが無い/不正な場合でもリクエスト自体は拒否せずそのまま次へ進める。
+// ログインを必須とするかどうかはハンドラ側がpkg/context.GetUserIDの結果を見て
+// 判断する(context-propagation.md「認可ミドルウェア／ドメイン層で明示的に検証する」)。
+func Authenticate(mgr *session.Manager) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			ctx := c.Request().Context()
+
+			cookie, err := c.Cookie(session.CookieName)
+			if err == nil && cookie.Value != "" {
+				if userID, verifyErr := mgr.Verify(cookie.Value); verifyErr == nil {
+					ctx = Ctx.SetUserID(ctx, userID)
+					c.SetRequest(c.Request().WithContext(ctx))
+				}
+			}
+			return next(c)
+		}
+	}
 }
 
 func SetDB() echo.MiddlewareFunc {
@@ -145,10 +174,13 @@ func ErrorHandler() echo.MiddlewareFunc {
 func ErrCodeToStatusAndMessage(err error) (int, string) {
 	code := errors.GetCode(err)
 	switch code {
+	case errors.ErrCodeUnAuthorized:
+		return http.StatusUnauthorized, code.Message()
 	case errors.ErrCodeUnAuthorization:
 		return http.StatusForbidden, code.Message()
 	case errors.ErrCodeInvalidArgument:
-		return http.StatusBadRequest, code.Message()
+		// error-handling.mdの表: バリデーション違反(MakeBusinessError)は422。
+		return http.StatusUnprocessableEntity, code.Message()
 	case errors.ErrCodeConflict:
 		return http.StatusConflict, code.Message()
 	case errors.ErrCodeNotFound:
