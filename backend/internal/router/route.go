@@ -13,6 +13,7 @@ type route struct {
 	user    handler.IUser
 	auth    handler.IAuth
 	product handler.IProduct
+	cart    handler.ICart
 }
 
 type IRouting interface {
@@ -23,11 +24,13 @@ type IRouting interface {
 func New(root *echo.Group, cfg config.Config) IRouting {
 	userRepo := mysql.NewUserRepository()
 	productRepo := mysql.NewProductRepository()
+	cartRepo := mysql.NewCartRepository()
 	sessionMgr := session.NewManager(cfg.SessionSecret, session.SessionTTL)
 	return &route{
 		rooAPI:  root,
 		user:    handler.NewUserHandler(userRepo, sessionMgr),
 		auth:    handler.NewAuthHandler(userRepo),
 		product: handler.NewProductHandler(productRepo),
+		cart:    handler.NewCartHandler(cartRepo, productRepo),
 	}
 }

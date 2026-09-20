@@ -13,4 +13,10 @@ func (r *route) SetupApplicationRoute() {
 	products := r.rooAPI.Group("/products")
 	products.GET("", r.product.List)
 	products.GET("/:id", r.product.GetByID)
+
+	cart := r.rooAPI.Group("/cart")
+	cart.GET("", r.cart.Get)
+	cart.POST("", r.cart.AddItem)
+	cart.PUT("", r.cart.UpdateItem)
+	cart.DELETE("", r.cart.RemoveItem)
 }
