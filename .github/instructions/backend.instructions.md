@@ -15,6 +15,7 @@ applyTo: backend/**
 - `.claude/rules/error-handling.md` — `pkg/errors`（ergo ベース）経由のエラー処理。`fmt.Errorf` / 標準 `errors.New` を直接使わない
 - `.claude/rules/context-propagation.md` — `context.Context` は必ず第一引数。`context.Background()` は `main` のみ
 - `.claude/rules/transaction.md` — 複数テーブル書き込みは `ITransactionManager.RunInTx` でラップする
+- `.claude/rules/request-validation.md` — リクエストは `c.Bind` + `param`/`query`/`json` タグでバインドし、`go-validator/v10` の `validate` タグでバリデーションする。リクエスト型にフィールドごとの doc コメントを書かない
 - `.claude/rules/testing.md` — テーブル駆動テスト、`moq` によるモック、実 DB でのリポジトリテスト
 
 ## 生成時に必ず確認すること

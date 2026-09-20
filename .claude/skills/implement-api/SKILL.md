@@ -17,19 +17,25 @@ description: >
    - バリデーション・状態遷移などのドメインロジックは純粋関数として実装する（ハンドラに書かない）
 2. **リポジトリを実装する**（`internal/database/mysql/<name>.go`）
    - ビジネスロジックを持たせない。データの読み書きのみ
-3. **ハンドラーを実装する**（`internal/handler/<name>.go`）
+3. **リクエスト型を定義する**（`internal/handler/request/<name>.go`。`.claude/rules/request-validation.md` を参照）
+   - パスパラメータは `param`、クエリパラメータは `query`、リクエストボディは `json` タグで宣言する
+   - 形式的なバリデーション（必須・フォーマット等）は `go-validator/v10` の `validate:"..."` タグで宣言する
+   - フィールドごとに独立した doc コメントは書かない。必要な場合のみ行末にインラインコメントを書く
+4. **ハンドラーを実装する**（`internal/handler/<name>.go`）
    - シンプルな CRUD はハンドラが domain のリポジトリを直接呼ぶ（usecase 層を作らない）
+   - リクエストは `c.Param()`/`c.QueryParam()` を直書きせず、`c.Bind(&req)` → `c.Validate(&req)` の順で読み取る
    - 複数テーブルへの書き込みがある場合のみ `internal/database` の `ITransactionManager.RunInTx` でラップする
    - 複雑なオーケストレーション（複数リポジトリ・外部 API 呼び出しの組み合わせ）が必要な場合のみ `internal/service/` を挟む
-4. **エラーハンドリング**
+5. **エラーハンドリング**
    - `pkg/errors` の `Make*Error` / `errors.Wrap` を使う。`fmt.Errorf` や標準 `errors.New` を直接使わない
-5. **ルーティング登録**（`internal/router/application.go`）
+   - `c.Bind`/`c.Validate` の失敗は `errors.MakeBusinessError(ctx, msg)`（422）に変換する
+6. **ルーティング登録**（`internal/router/application.go`）
    - `SetupApplicationRoute` にエンドポイントを追加する
-6. **モックを生成する**
+7. **モックを生成する**
    - `go generate ./...` で `//go:generate moq` ディレクティブからモックを再生成する
-7. **テストを書く**（`.claude/rules/testing.md` を参照）
+8. **テストを書く**（`.claude/rules/testing.md` を参照）
    - ドメイン層はテーブル駆動テストで純粋関数を検証する
-   - ハンドラーは `httptest` + `echo.New()` で実際のルーターを立てて検証する
+   - ハンドラーは `httptest` + `echo.New()` で実際のルーターを立てて検証する。`e.Validator = validator.New()` / `e.Binder = binder.New()`（`internal/server/server.go` と同じ設定）を忘れない
    - リポジトリのテストは実 DB（`docker compose up -d db`）で検証する
 
 ## 参照
@@ -39,4 +45,5 @@ description: >
 - `.claude/rules/error-handling.md`
 - `.claude/rules/context-propagation.md`
 - `.claude/rules/transaction.md`
+- `.claude/rules/request-validation.md`
 - `.claude/rules/testing.md`
