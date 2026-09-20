@@ -97,6 +97,23 @@ func Is(err error, target error) bool {
 	return errors.Is(err, target)
 }
 
+// WithInvalidArgumentCode はctxを持たずMake*Errorを呼べない箇所
+// (echo.Validatorインターフェースの`Validate(i any) error`のようにctx引数が
+// 無いシグネチャ)で、クライアント入力起因のエラーだと分かっている場合に
+// ErrCodeInvalidArgument(422)だけを付与するためのヘルパー。ログは出力しない
+// (ctxが無くログにRequestIDを乗せられないため)。ErrTypeBussinessではラップ
+// しないため、呼び出し元がerrors.Wrap(ctx, err)に渡した時点でIsWrapped(err)は
+// falseのままとなり、Wrapが実際にログを出力する(このコードは
+// ergo.CodeOf経由でWrap後も保持される)。
+//
+// 現在の利用例: pkg/validator.Validator.Validate（request-validation.md）。
+func WithInvalidArgumentCode(err error) error {
+	if err == nil {
+		return nil
+	}
+	return ergo.WithCode(err, ErrCodeInvalidArgument)
+}
+
 // Wrap は詳細不明な下位レイヤーのエラー(DBドライバ・リポジトリが返す生のエラー等)
 // にスタックトレースを付与して伝搬する。ログはこの関数の内部で一度だけ出力する
 // (error-handling.md「ラップのみ: 詳細不明の外部エラーはerrors.Wrap(ctx, err)で
@@ -104,9 +121,10 @@ func Is(err error, target error) bool {
 //
 // 既にMake*Error/Wrap済みのエラー(IsWrapped(err)がtrue)はそのまま返す
 // (「一度ラップしたエラーは再ラップしない」ため、二重ログを防ぐ)。
-// このWrapはエラーコードを付与しない。呼び出し元が特定のHTTPステータスに
-// 変換したい場合は、事前にerrors.Is(err, ErrXxx)で判別し対応するMake*Errorを
-// 使うこと。コード未設定のままErrCodeToStatusAndMessageに渡ると500として扱われる。
+// このWrap自体は新しいエラーコードを付与しないが、呼び出し元が事前に
+// WithInvalidArgumentCode等でコードを付与したerrを渡した場合、そのコードは
+// ergo.CodeOf経由でErrCodeToStatusAndMessageに引き継がれる。コード未設定の
+// ままErrCodeToStatusAndMessageに渡ると500として扱われる。
 func Wrap(ctx context.Context, err error) error {
 	if err == nil {
 		return nil

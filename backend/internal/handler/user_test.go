@@ -28,6 +28,7 @@ func newTestContext(t *testing.T, method, path string, body string, userID strin
 
 	e := echo.New()
 	e.Validator = validator.New()
+	e.Binder = validator.NewBinder()
 	var req *http.Request
 	if body != "" {
 		req = httptest.NewRequest(method, path, strings.NewReader(body))
@@ -82,6 +83,12 @@ func TestUserHandler_Create(t *testing.T) {
 		{
 			name:       "uidが空の場合は422",
 			body:       `{"uid":"","displayName":"taro"}`,
+			repo:       &moq.IUserRepositoryMock{},
+			wantStatus: http.StatusUnprocessableEntity,
+		},
+		{
+			name:       "リクエストボディが不正なJSONの場合は422",
+			body:       `{"uid":`,
 			repo:       &moq.IUserRepositoryMock{},
 			wantStatus: http.StatusUnprocessableEntity,
 		},

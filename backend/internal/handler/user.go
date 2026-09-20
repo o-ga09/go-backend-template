@@ -39,10 +39,10 @@ func (h *userHandler) Create(c *echo.Context) error {
 
 	var req request.CreateUserRequest
 	if err := c.Bind(&req); err != nil {
-		return errors.MakeBusinessError(ctx, "invalid request body")
+		return errors.Wrap(ctx, err)
 	}
 	if err := c.Validate(&req); err != nil {
-		return errors.MakeBusinessError(ctx, err.Error())
+		return errors.Wrap(ctx, err)
 	}
 
 	if err := user.CanCreate(req.UID, req.DisplayName); err != nil {
@@ -95,10 +95,10 @@ func (h *userHandler) GetByID(c *echo.Context) error {
 
 	var req request.GetUserRequest
 	if err := c.Bind(&req); err != nil {
-		return errors.MakeBusinessError(ctx, "invalid request")
+		return errors.Wrap(ctx, err)
 	}
 	if err := c.Validate(&req); err != nil {
-		return errors.MakeBusinessError(ctx, err.Error())
+		return errors.Wrap(ctx, err)
 	}
 
 	u, err := h.repo.FindByID(ctx, req.ID)

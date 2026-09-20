@@ -33,6 +33,7 @@ func New(ctx context.Context) *Server {
 	cfg := Ctx.GetCfgFromCtx(ctx)
 	engine := echo.New()
 	engine.Validator = validator.New()
+	engine.Binder = validator.NewBinder()
 	rootAPI := engine.Group("/api")
 	return &Server{
 		Port:   cfg.Port,

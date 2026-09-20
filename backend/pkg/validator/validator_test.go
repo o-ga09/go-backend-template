@@ -1,6 +1,7 @@
 package validator_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -39,7 +40,14 @@ func TestValidator_Validate(t *testing.T) {
 			if err == nil {
 				t.Fatal("Validate() error = nil, want error")
 			}
-			if got := err.Error(); got != tc.wantErr {
+			// Validate()はerrors.WithInvalidArgumentCode(422)で包んで返す
+			// (request-validation.md)ため、jaタグメッセージ自体は
+			// errors.Asで*validator.ValidationErrorまで辿って検証する。
+			var verr *validator.ValidationError
+			if !errors.As(err, &verr) {
+				t.Fatalf("Validate() error chain does not contain *validator.ValidationError: %v", err)
+			}
+			if got := verr.Error(); got != tc.wantErr {
 				// デフォルトメッセージへのフォールバックは完全一致ではなくフィールド名を含むかで確認する
 				if tc.name == "jaタグが無いフィールドはデフォルトメッセージにフォールバックする" {
 					if !strings.Contains(got, tc.wantErr) {

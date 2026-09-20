@@ -6,6 +6,12 @@
 // フィールドごとに指定する(例: `validate:"required" ja:"uidは必須です"`)。
 // `ja`タグが無いフィールドはgo-playground/validatorのデフォルト(英語)メッセージに
 // フォールバックする。
+//
+// Validateが返すエラーには、その場でerrors.WithInvalidArgumentCode(422)を
+// 付与しておく。echo.Validatorインターフェースの`Validate(i any) error`には
+// ctxが渡らないためerrors.MakeBusinessErrorは呼べないが、コードだけ先に
+// 付けておけば、ctxを持つハンドラ側でerrors.Wrap(ctx, err)するだけで422が
+// 自動的にレスポンスされる(request-validation.md参照)。
 package validator
 
 import (
@@ -13,6 +19,8 @@ import (
 	"strings"
 
 	val "github.com/go-playground/validator/v10"
+
+	"github.com/o-ga09/go-backend-template/pkg/errors"
 )
 
 // Validator はecho.Validatorインターフェースの実装。
@@ -26,7 +34,8 @@ func New() *Validator {
 }
 
 // Validate はvalidate:"..."タグに従ってiを検証する。失敗した場合、失敗した各フィールドの
-// `ja`タグを使って組み立てたエラーを返す。
+// `ja`タグを使って組み立てたエラーに422のエラーコードを付与して返す
+// (errors.WithInvalidArgumentCode。呼び出し元はerrors.Wrap(ctx, err)するだけでよい)。
 func (v *Validator) Validate(i any) error {
 	err := v.validate.Struct(i)
 	if err == nil {
@@ -37,7 +46,7 @@ func (v *Validator) Validate(i any) error {
 	if !ok {
 		return err
 	}
-	return translate(i, verrs)
+	return errors.WithInvalidArgumentCode(translate(i, verrs))
 }
 
 // translate はvalidator.ValidationErrorsを、各フィールドの`ja`タグを使った
