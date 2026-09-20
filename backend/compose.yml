@@ -4,6 +4,12 @@ services:
     container_name: db
     image: mysql:8.0
     platform: linux/x86_64
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/mysqld
     environment:
       MYSQL_ROOT_PASSWORD: P@ssw0rd
       MYSQL_DATABASE: test

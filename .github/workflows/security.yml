@@ -1,0 +1,103 @@
+name: Security Checks
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    branches:
+      - "main"
+
+permissions:
+  contents: read
+
+jobs:
+  # シークレット検出。過去コミットも含めてスキャンするため fetch-depth: 0 が必要。
+  # 誤検知が出た場合は .gitleaks.toml でallowlistを追加する（新規シークレットの追加は禁止）。
+  gitleaks:
+    name: gitleaks (secret scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 検証済み（verified）のシークレットのみを対象にし、gitleaksと異なる検出ロジックで二重にチェックする。
+  trufflehog:
+    name: trufflehog (secret scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: trufflehog
+        uses: trufflesecurity/trufflehog@288a8a8643a2c5a36b81d231c550dccfa0beeb64 # main
+        with:
+          extra_args: --only-verified
+
+  # SAST。既存コードに対する初回導入のため、まずは検出結果をCode Scanningへ可視化するのみでブロックはしない。
+  # semgrep CLIを直接使う（semgrep/semgrep-actionのDockerラッパーはSARIF出力パスが安定せず
+  # upload-sarif側で "Path does not exist" になったため採用しない）。
+  # `semgrep scan` はfindingsがあっても既定でexit 0（--errorを付けない限りブロックしない）ため、
+  # continue-on-errorは異常終了時の保険として残す。
+  # 検出内容が落ち着いたら --error を付けてブロッキング化する。
+  sast:
+    name: semgrep (SAST)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Install semgrep
+        run: pip install semgrep
+      - name: semgrep scan
+        continue-on-error: true
+        run: semgrep scan --config auto --sarif --output semgrep.sarif
+      - name: upload SARIF
+        if: always() && hashFiles('semgrep.sarif') != ''
+        uses: github/codeql-action/upload-sarif@3ea06614dafe36dec890db3446326e0d40ce53d4 # v3
+        with:
+          sarif_file: semgrep.sarif
+
+  # 依存関係の脆弱性チェック。トランジティブ依存の既知脆弱性が多く、修正には個別の依存更新作業が必要なため
+  # 現時点ではレポートのみ（ブロックしない）。棚卸し・更新は別タスクで対応する。
+  # sastジョブと同じ理由で continue-on-error は各ステップに付ける。
+  dependency-check:
+    name: dependency vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.25"
+      - name: govulncheck (backend)
+        continue-on-error: true
+        working-directory: backend
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 10
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 18
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: pnpm install (frontend)
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: pnpm audit (frontend)
+        continue-on-error: true
+        working-directory: frontend
+        run: pnpm audit --audit-level=high

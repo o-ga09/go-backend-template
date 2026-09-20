@@ -76,6 +76,18 @@ This is a template repository for implementing web applications using Go and Nex
 - Feel free to contribute to this template by submitting issues or pull requests.
 - Happy coding!
 
+### Documentation for AI agents
+
+- [`CLAUDE.md`](CLAUDE.md) is the entry point for AI coding agents (Claude Code and other `AGENTS.md`-aware tools). `AGENTS.md` is a symlink to it.
+- [`DESIGN.md`](DESIGN.md) documents the `frontend/` UI design (design system tokens and the EC sample's screen specs). Backend architecture decisions and the reasoning behind them live in `CLAUDE.md`'s "アーキテクチャの設計判断" section.
+- `.claude/skills/` holds task-specific workflows: `implement-api`, `implement-component`, `migration-db-schema`, `design-feature` (feature design), plus `commit`, `create-pr`, and `code-review` for the git/GitHub workflow.
+
+### CI
+
+- `.github/workflows/lint_and_test.yml`: backend tests and `golangci-lint`.
+- `.github/workflows/security.yml`: secret scanning (gitleaks, trufflehog), SAST (Semgrep), and dependency vulnerability checks (`govulncheck`, `pnpm audit`).
+- `.github/workflows/deploy-cloudrun.yml` / `deploy-ecs.yml`: deployment.
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details
