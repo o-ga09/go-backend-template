@@ -9,4 +9,8 @@ func (r *route) SetupApplicationRoute() {
 	auth := r.rooAPI.Group("/auth")
 	auth.GET("/user", r.auth.CurrentUser)
 	auth.POST("/logout", r.auth.Logout)
+
+	products := r.rooAPI.Group("/products")
+	products.GET("", r.product.List)
+	products.GET("/:id", r.product.GetByID)
 }

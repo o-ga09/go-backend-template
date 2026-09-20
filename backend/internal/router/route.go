@@ -9,9 +9,10 @@ import (
 )
 
 type route struct {
-	rooAPI *echo.Group
-	user   handler.IUser
-	auth   handler.IAuth
+	rooAPI  *echo.Group
+	user    handler.IUser
+	auth    handler.IAuth
+	product handler.IProduct
 }
 
 type IRouting interface {
@@ -21,10 +22,12 @@ type IRouting interface {
 
 func New(root *echo.Group, cfg config.Config) IRouting {
 	userRepo := mysql.NewUserRepository()
+	productRepo := mysql.NewProductRepository()
 	sessionMgr := session.NewManager(cfg.SessionSecret, session.SessionTTL)
 	return &route{
-		rooAPI: root,
-		user:   handler.NewUserHandler(userRepo, sessionMgr),
-		auth:   handler.NewAuthHandler(userRepo),
+		rooAPI:  root,
+		user:    handler.NewUserHandler(userRepo, sessionMgr),
+		auth:    handler.NewAuthHandler(userRepo),
+		product: handler.NewProductHandler(productRepo),
 	}
 }
