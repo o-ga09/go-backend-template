@@ -19,4 +19,9 @@ func (r *route) SetupApplicationRoute() {
 	cart.POST("", r.cart.AddItem)
 	cart.PUT("", r.cart.UpdateItem)
 	cart.DELETE("", r.cart.RemoveItem)
+
+	orders := r.rooAPI.Group("/orders")
+	orders.POST("", r.order.Create)
+	orders.GET("", r.order.List)
+	orders.GET("/:id", r.order.GetByID)
 }

@@ -1,0 +1,158 @@
+package handler
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/labstack/echo/v5"
+
+	"github.com/o-ga09/go-backend-template/internal/database"
+	"github.com/o-ga09/go-backend-template/internal/domain/cart"
+	"github.com/o-ga09/go-backend-template/internal/domain/order"
+	"github.com/o-ga09/go-backend-template/internal/domain/product"
+	"github.com/o-ga09/go-backend-template/internal/handler/request"
+	"github.com/o-ga09/go-backend-template/internal/handler/response"
+	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
+	"github.com/o-ga09/go-backend-template/pkg/errors"
+)
+
+// orderHandler は注文リソース(/api/orders)に関するエンドポイントを扱う。
+// カートからの注文確定は複数リポジトリ(cart/product/order)を組み合わせるが、
+// 外部API呼び出しや暗号化を伴わないため、architecture.mdの例外(service層)には
+// 該当しない。usecase層を挟まずハンドラが直接domainのリポジトリを呼び出す。
+// 注文操作は全て認証必須で、常にログイン中ユーザー本人の注文のみを対象とする。
+type orderHandler struct {
+	orderRepo   order.IOrderRepository
+	cartRepo    cart.ICartRepository
+	productRepo product.IProductRepository
+	txManager   database.ITransactionManager
+}
+
+// IOrder はorderHandlerの公開インターフェース。
+type IOrder interface {
+	Create(c *echo.Context) error
+	List(c *echo.Context) error
+	GetByID(c *echo.Context) error
+}
+
+// NewOrderHandler はorderHandlerを生成する。
+func NewOrderHandler(orderRepo order.IOrderRepository, cartRepo cart.ICartRepository, productRepo product.IProductRepository, txManager database.ITransactionManager) IOrder {
+	return &orderHandler{orderRepo: orderRepo, cartRepo: cartRepo, productRepo: productRepo, txManager: txManager}
+}
+
+// Create はログイン中ユーザーのカートから注文を確定する。カートが未作成/空の場合、
+// またはカート内商品の在庫が不足している場合は422を返す。カート内商品が既に
+// 削除されている場合は404を返す。商品検索・バリデーションはトランザクション外で
+// 行い、orders/order_itemsへの書き込みとカートのクリアのみをITransactionManager.
+// RunInTxでラップする(transaction.md「外部API呼び出しとトランザクションを
+// 重ねない」、「ハンドラから直接呼ぶ場合」パターン)。
+// POST /api/orders
+func (h *orderHandler) Create(c *echo.Context) error {
+	ctx := c.Request().Context()
+
+	requesterID := Ctx.GetUserID(ctx)
+	if requesterID == "" {
+		return errors.MakeAuthorizedError(ctx, "authentication required")
+	}
+
+	ct, err := h.cartRepo.FindByUserID(ctx, requesterID)
+	if err != nil {
+		if errors.Is(err, errors.ErrRecordNotFound) {
+			return errors.MakeBusinessError(ctx, "cart is empty")
+		}
+		return errors.Wrap(ctx, err)
+	}
+	if err := ct.CanCheckout(); err != nil {
+		if errors.Is(err, errors.ErrCartEmpty) {
+			return errors.MakeBusinessError(ctx, "cart is empty")
+		}
+		return errors.Wrap(ctx, err)
+	}
+
+	products := make(map[string]*product.Product, len(ct.Items))
+	for _, item := range ct.Items {
+		p, err := h.productRepo.FindByID(ctx, item.ProductID)
+		if err != nil {
+			if errors.Is(err, errors.ErrRecordNotFound) {
+				return errors.MakeNotFoundError(ctx, "product not found")
+			}
+			return errors.Wrap(ctx, err)
+		}
+		products[item.ProductID] = p
+	}
+
+	o, err := order.NewFromCart(ct, products)
+	if err != nil {
+		if errors.Is(err, errors.ErrInsufficientStock) {
+			return errors.MakeBusinessError(ctx, "insufficient stock")
+		}
+		if errors.Is(err, errors.ErrRecordNotFound) {
+			return errors.MakeNotFoundError(ctx, "product not found")
+		}
+		return errors.Wrap(ctx, err)
+	}
+
+	if err := h.txManager.RunInTx(ctx, func(txCtx context.Context) error {
+		if err := h.orderRepo.Create(txCtx, o); err != nil {
+			return err
+		}
+		return h.cartRepo.Clear(txCtx, ct.ID)
+	}); err != nil {
+		return errors.Wrap(ctx, err)
+	}
+
+	return c.JSON(http.StatusCreated, response.FromOrder(o))
+}
+
+// List はログイン中ユーザーの注文履歴を取得する。
+// requesterID(ログイン中ユーザーのID)以外をクエリパラメータ等で受け取らないため、
+// 他ユーザーの注文履歴を取得することはできない。
+// GET /api/orders
+func (h *orderHandler) List(c *echo.Context) error {
+	ctx := c.Request().Context()
+
+	requesterID := Ctx.GetUserID(ctx)
+	if requesterID == "" {
+		return errors.MakeAuthorizedError(ctx, "authentication required")
+	}
+
+	os, err := h.orderRepo.ListByUserID(ctx, requesterID)
+	if err != nil {
+		return errors.Wrap(ctx, err)
+	}
+
+	return c.JSON(http.StatusOK, response.FromOrders(os))
+}
+
+// GetByID はログイン中ユーザー本人の注文詳細を取得する。存在しない場合は404、
+// 他ユーザーの注文の場合は403を返す。
+// GET /api/orders/:id
+func (h *orderHandler) GetByID(c *echo.Context) error {
+	ctx := c.Request().Context()
+
+	requesterID := Ctx.GetUserID(ctx)
+	if requesterID == "" {
+		return errors.MakeAuthorizedError(ctx, "authentication required")
+	}
+
+	var req request.GetOrderRequest
+	if err := c.Bind(&req); err != nil {
+		return errors.Wrap(ctx, err)
+	}
+	if err := c.Validate(&req); err != nil {
+		return errors.Wrap(ctx, err)
+	}
+
+	o, err := h.orderRepo.FindByID(ctx, req.ID)
+	if err != nil {
+		if errors.Is(err, errors.ErrRecordNotFound) {
+			return errors.MakeNotFoundError(ctx, "order not found")
+		}
+		return errors.Wrap(ctx, err)
+	}
+	if !o.IsOwnedBy(requesterID) {
+		return errors.MakeAuthorizationError(ctx, "cannot access other user's order")
+	}
+
+	return c.JSON(http.StatusOK, response.FromOrder(o))
+}

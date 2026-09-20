@@ -15,6 +15,7 @@ type route struct {
 	auth    handler.IAuth
 	product handler.IProduct
 	cart    handler.ICart
+	order   handler.IOrder
 }
 
 type IRouting interface {
@@ -26,6 +27,7 @@ func New(root *echo.Group, cfg config.Config) IRouting {
 	userRepo := mysql.NewUserRepository()
 	productRepo := mysql.NewProductRepository()
 	cartRepo := mysql.NewCartRepository()
+	orderRepo := mysql.NewOrderRepository()
 	txManager := database.NewTransactionManager()
 	sessionMgr := session.NewManager(cfg.SessionSecret, session.SessionTTL)
 	return &route{
@@ -34,5 +36,6 @@ func New(root *echo.Group, cfg config.Config) IRouting {
 		auth:    handler.NewAuthHandler(userRepo),
 		product: handler.NewProductHandler(productRepo),
 		cart:    handler.NewCartHandler(cartRepo, productRepo, txManager),
+		order:   handler.NewOrderHandler(orderRepo, cartRepo, productRepo, txManager),
 	}
 }

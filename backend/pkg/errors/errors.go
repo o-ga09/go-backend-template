@@ -68,6 +68,13 @@ var (
 	// ergo.NewSentinelで定義する(errors.Newで毎回生成すると呼び出し元が種別判定できない)。
 	ErrCartEmpty = ergo.NewSentinel("cart has no items")
 
+	// 注文エラー
+	// ErrInsufficientStock は注文確定時にカート内商品の在庫が不足している場合の
+	// エラー(order.NewFromCart)。呼び出し元がerrors.Is(err, ErrInsufficientStock)で
+	// 判別しerrors.MakeBusinessErrorに変換できるよう、ErrCartEmptyと同様に
+	// ergo.NewSentinelで定義する。
+	ErrInsufficientStock = ergo.NewSentinel("insufficient stock")
+
 	// 画像エラー
 	ErrInvalidImageType  = ergo.New("ファイルの種類が不正です。")
 	ErrFailedImageName   = ergo.New("ファイル名の生成に失敗しました。")
