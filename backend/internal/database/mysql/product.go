@@ -36,11 +36,12 @@ func (r *productRepository) FindByID(ctx context.Context, id string) (*product.P
 }
 
 // List は商品を全件取得する。ページングは今回不要(YAGNI)。
+// 返却順は作成日時の降順で安定させる(ORDER BY未指定だと順序が不定になるため)。
 func (r *productRepository) List(ctx context.Context) ([]*product.Product, error) {
 	db := Ctx.GetDBFromCtx(ctx)
 
 	var ps []*product.Product
-	if err := db.WithContext(ctx).Find(&ps).Error; err != nil {
+	if err := db.WithContext(ctx).Order("created_at DESC").Find(&ps).Error; err != nil {
 		return nil, err
 	}
 	return ps, nil

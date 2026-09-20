@@ -1,4 +1,3 @@
-// Package response はハンドラが返すHTTPレスポンスボディの型を定義する。
 package response
 
 import "github.com/o-ga09/go-backend-template/internal/domain/product"
