@@ -79,7 +79,7 @@ This is a template repository for implementing web applications using Go and Nex
 ### Documentation for AI agents
 
 - [`CLAUDE.md`](CLAUDE.md) is the entry point for AI coding agents (Claude Code and other `AGENTS.md`-aware tools). `AGENTS.md` is a symlink to it.
-- [`DESIGN.md`](DESIGN.md) explains the architecture and the reasoning behind it (layering, domain=DB model, transaction/error-handling policies).
+- [`DESIGN.md`](DESIGN.md) documents the `frontend/` UI design (design system tokens and the EC sample's screen specs). Backend architecture decisions and the reasoning behind them live in `CLAUDE.md`'s "アーキテクチャの設計判断" section.
 - `.claude/skills/` holds task-specific workflows: `implement-api`, `implement-component`, `migration-db-schema`, `design-feature` (feature design), plus `commit`, `create-pr`, and `code-review` for the git/GitHub workflow.
 
 ### CI

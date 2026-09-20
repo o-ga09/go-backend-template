@@ -1,65 +1,107 @@
 # DESIGN.md
 
-このリポジトリのアーキテクチャ全体像と、その設計判断の理由をまとめたドキュメント。実装の詳細な作法（禁止事項・書き方）は [`.claude/rules/`](.claude/rules/) に、セットアップ手順は [README.md](README.md) に譲る。
+`frontend/`（Next.js）の UI デザインをまとめたドキュメント。デザインシステム（トークン・コンポーネント方針）と、EC商材サンプルの画面仕様の2部構成。バックエンドのアーキテクチャ設計判断は [CLAUDE.md](CLAUDE.md)「アーキテクチャの設計判断」を参照。
 
-## 目的
+## デザインシステム
 
-このリポジトリは、実運用に耐える構成を最初から示す Web アプリケーションテンプレート。認証・認可付きの EC 商材サンプル（商品・カート・注文）を題材に、レイヤー構成・エラーハンドリング・トランザクション管理・テスト方針の「型」を提供し、新規プロジェクト立ち上げ時にサンプル実装を骨組みへ置き換えるだけで使える状態を目指す。
+`frontend/tailwind.config.ts` / `frontend/app/globals.css` に定義済みのトークンを正とする。ここでは一覧化のみ行い、値の変更は実装側（Tailwind設定）で行う。
 
-## 全体構成
+### カラー
 
-```
-[Next.js クライアント]
-        │ HTTPS
-[Echo（Cloud Run または ECS）]
-        │ GORM
-[MySQL]
-```
+shadcn/ui のデフォルトパレット（HSLカスタムプロパティ、`tailwind.config.ts` の `theme.extend.colors` から `hsl(var(--xxx))` として参照）をベースにする。ライト/ダーク両方を `app/globals.css` の `:root` / `.dark` で定義済み（`darkMode: 'class'`）。
 
-- クライアントは Next.js（App Router）1つのみ。TanStack Query でサーバー状態を管理し、認証は NextAuth（Google OAuth）
-- サーバーは Go（Echo）。Cloud Run（スケール0対応）と ECS のどちらでも動作する前提で `pkg/config` に環境変数を一元化
-- DB は MySQL。スキーマの正は `db/migrations/`（`sql-migrate`）。GORM の `AutoMigrate` は使わない
+| トークン | 用途 |
+|---|---|
+| `background` / `foreground` | ページ全体の背景・文字色 |
+| `primary` / `primary-foreground` | 主要アクション（購入する・注文するボタンなど） |
+| `secondary` / `secondary-foreground` | 補助的なアクション |
+| `muted` / `muted-foreground` | 補足情報・非活性テキスト |
+| `accent` / `accent-foreground` | ホバー・選択状態のハイライト |
+| `destructive` / `destructive-foreground` | 削除・キャンセルなど破壊的操作 |
+| `card` / `card-foreground` | カード型コンテナ（商品カードなど） |
+| `border` / `input` / `ring` | 枠線・フォーム入力・フォーカスリング |
 
-## レイヤー構成の設計判断
+新しい色を追加する場合は個別コンポーネントに直書きせず、`globals.css` にトークンを追加してから Tailwind の `colors` に登録する。
 
-基本形は2層（`server` → `domain`）。usecase 層（`internal/service/`）は例外であり、以下のいずれかに該当する場合のみ導入する。
+### タイポグラフィ
 
-- 複数リポジトリをまたぐオーケストレーションが必要
-- 外部API呼び出し（決済・通知など）を伴う
-- 暗号化/復号（KMS呼び出し）を伴う
+フォントは Geist Sans（本文）/ Geist Mono（コード・数値表示）を `next/font/google` で読み込み（`lib/font.ts`）、CSS変数（`--font-geist-sans` / `--font-geist-mono`）として `layout.tsx` の `<body>` に適用済み。
 
-**なぜ2層をデフォルトにするか**: シンプルな CRUD に usecase 層を強制すると、ハンドラ→usecase→domain の3層すべてが「呼ぶだけ」の薄いパススルーになりやすく、変更のたびに3ファイルを触る割に得られる恩恵が小さい。オーケストレーションが必要になった時点で初めて usecase 層を挟むことで、複雑さに見合った層構成を保つ。
+`tailwind.config.ts` の `fontSize` にタイポグラフィスケールを定義済み。
 
-ドメインロジック（バリデーション・状態遷移の可否判定）は必ず domain 層の純粋関数に置く。ハンドラ・usecase はそれを呼び出すだけにする。詳細は [`.claude/rules/architecture.md`](.claude/rules/architecture.md) を参照。
+| クラス | サイズ / 行間 | 用途 |
+|---|---|---|
+| `text-display-1` / `text-display-2` | 72px / 60px, line-height 1.1 | ランディング等の大見出し |
+| `text-heading-1`〜`text-heading-4` | 48px〜24px, line-height 1.2 | 画面タイトル・セクション見出し |
+| `text-body-lg` / `text-body-base` / `text-body-sm` / `text-body-xs` | 18px〜12px, line-height 1.5 | 本文・補足・キャプション |
 
-## domain＝DBモデルという前提
+新しいテキストスタイルが必要な場合は `tailwind.config.ts` の `fontSize` にスケールとして追加し、コンポーネント側でアドホックな `text-[Npx]` を書かない。
 
-domain の構造体がそのまま GORM モデルとして永続化される（変換専用構造体を作らない）。これにより：
+### スペーシング・角丸
 
-- ドメイン層とデータアクセス層の間でマッピングコードを書く必要がなくなる
-- `BaseModel`（ID・Version・CreatedAt・UpdatedAt）を埋め込むだけで、採番・タイムスタンプ・楽観ロックを GORM プラグインに委譲できる
+- スペーシング: `tailwind.config.ts` の `spacing`（4px刻み。`1`=4px 〜 `24`=96px）を使う。アドホックな `p-[Npx]` を避ける
+- 角丸: `--radius`（`globals.css`、デフォルト `0.5rem`）から `rounded-lg` / `rounded-md` / `rounded-sm` を導出。個別に `rounded-[Npx]` を指定しない
 
-暗号化やカラム名の詰め替えが必要なドメインだけ、この前提から外れて手動マッピングする。詳細は [`.claude/rules/architecture.md`](.claude/rules/architecture.md)「domain＝DBモデル・BaseModel・楽観ロック」を参照。
+### コンポーネント方針
 
-## トランザクションと外部API呼び出しの分離
+- UI コンポーネントは shadcn/ui（Radix UI + Tailwind CSS）を使う。新規追加は `npx shadcn@latest add <component>` で `components/ui/` に生成する（`.claude/rules/frontend.md`）
+- ダイアログ系コンポーネントで z-index の衝突が起きた実績があるため（`globals.css` の `.dialog-overlay` / `.dialog-content` 上書き）、新しいオーバーレイ系コンポーネント（Dialog/Drawer/Popover等）を追加する際は既存の z-index 上書きと衝突しないか確認する
+- ダークモードは `class` 戦略。新規コンポーネントはライト/ダーク両方のトークンで見た目を確認する
 
-外部API呼び出し（決済・通知・KMSでの暗号化）とDBトランザクションは重ねない。理由は、応答時間が読めない外部呼び出しの間 DB 接続を占有すると、Cloud Run のスケール0起動時などに接続が枯渇しやすいため。呼び出し順序は「外部API呼び出し（トランザクション外）→ 短いトランザクションでの書き込み」に固定する。詳細は [`.claude/rules/transaction.md`](.claude/rules/transaction.md) を参照。
+---
 
-## エラーハンドリングの設計判断
+## 画面仕様（EC商材サンプル）
 
-`pkg/errors`（`ergo` ベース）に統一し、`fmt.Errorf` / 標準 `errors.New` を直接使わない。狙いは：
+対応する Issue: 「Frontend: EC画面の実装(商品一覧・詳細・カート・注文・マイページ)」。**現時点でこれらの画面は未実装**であり、以下は実装時に従う設計仕様。実装後は本セクションを実態に合わせて更新する。
 
-- エラーコード（`ergo.WithCode`）とスタックトレースを常に一貫した形で持たせ、`errors.GetCode(err)` から HTTP ステータスへ機械的に変換できるようにする
-- エラーメッセージに機密情報（パスワード・トークン・個人情報・決済情報）を載せない運用を、レビューで検出しやすい形（`Make*Error` 関数の使用箇所を見るだけで判断できる）にする
+### 画面一覧
 
-詳細は [`.claude/rules/error-handling.md`](.claude/rules/error-handling.md) を参照。
+| パス | 画面名 | 概要 | 認証 |
+|---|---|---|---|
+| `/` | 商品一覧 | 商品をカード（`card` トークン）のグリッドで表示。検索・カテゴリ絞り込み | 不要 |
+| `/products/[id]` | 商品詳細 | 商品画像・説明・価格・在庫状況、カート追加ボタン（`primary`） | 不要 |
+| `/cart` | カート | カート内商品の一覧・数量変更・削除、合計金額、レジに進むボタン | 必要 |
+| `/checkout` | 注文（購入手続き） | 配送先・支払い方法の確認、注文確定ボタン（`primary`、二重送信防止） | 必要 |
+| `/mypage` | マイページ | ユーザー情報・注文履歴へのリンク | 必要 |
+| `/mypage/orders` | 注文履歴 | 過去の注文一覧・ステータス表示 | 必要 |
 
-## セキュリティ
+「認証が必要」な画面は、未ログイン時は NextAuth のログイン導線へリダイレクトする（`context/authContext.tsx` の認証状態を参照。`.claude/rules/frontend.md`）。
 
-- シークレット検出（gitleaks / trufflehog）と SAST（Semgrep）、依存関係の脆弱性チェック（govulncheck / pnpm audit）を CI（`.github/workflows/security.yml`）で強制する
-- 機密情報（認証情報・個人情報・決済情報）は `context.Context` に入れない。生存スコープを最小にし、引数で渡す（[`.claude/rules/context-propagation.md`](.claude/rules/context-propagation.md)）
-- 暗号化が必要なドメインは `internal/crypto/`（`crypto.ISealer`）経由で行い、平文はローカル変数としてのみ生存させる
+### 共通レイアウト
 
-## 今後の拡張について
+- ヘッダー: ロゴ／サービス名、カートアイコン（点数バッジ表示）、ログイン状態に応じたユーザーメニュー
+- 状態表示: 全画面でローディング（TanStack Query の `isLoading`）・エラー・空状態（例: カートが空）をコンポーネントレベルで明示的にハンドリングする（`.claude/rules/frontend.md`「API呼び出し」）
+- トースト通知: `components/ui/sonner.tsx`（導入済み）をカート追加・注文確定などの完了通知に使う
 
-新しいドメイン（EC商材の商品・カート・注文など）を追加する場合も、上記の方針（2層デフォルト・domain＝DBモデル・パッケージ構成）に従う。個別機能の設計は `.claude/skills/design-feature` スキルを使って整理し、必要であればこの DESIGN.md に設計判断を追記する。
+### 商品一覧画面
+
+- 商品カード: 画像・商品名（`heading-4`）・価格（`body-lg`）・カート追加ボタン
+- 検索・絞り込みはURLクエリパラメータで状態を持つ（画面リロードでも条件を保持）
+- データ取得は `api/product/` のフック経由（TanStack Query）。コンポーネントから直接 `fetch` しない
+
+### 商品詳細画面
+
+- 在庫切れ時はカート追加ボタンを非活性化し、理由を明示する
+- 数量選択は在庫数を上限にする
+
+### カート画面
+
+- 数量変更・削除は楽観的更新（optimistic update）を検討するが、失敗時は必ず表示状態を元に戻す
+- 空カート時は商品一覧への導線を表示する
+
+### 注文（チェックアウト）画面
+
+- 注文確定ボタンは二重送信を防止する（連打・多重タブ対策）
+- 送信中はボタンを非活性化しローディング状態を表示する
+- 失敗時は入力内容（配送先等）を保持したまま再試行できるようにする（`.claude/rules/error-handling.md`「ユーザー体験としてのエラー」）
+
+### マイページ・注文履歴画面
+
+- 注文ステータス（例: 処理中・発送済み・完了・キャンセル）はバッジで視覚的に区別する
+- 個人情報（氏名・住所等）の表示は必要最小限にする
+
+---
+
+## 更新方針
+
+新しい画面・コンポーネントを追加する際は、まず `design-feature` スキルで機能設計を行い、UIに関わる部分をこのファイルに追記してから `implement-component` スキルで実装する。
