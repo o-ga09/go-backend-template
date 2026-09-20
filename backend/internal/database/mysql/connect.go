@@ -49,6 +49,11 @@ func Connect(ctx context.Context) (*gorm.DB, error) {
 		break
 	}
 
+	// BaseModelを埋め込んだドメインエンティティのID採番・楽観ロックを扱うプラグイン
+	if err := db.Use(NewBaseModelPlugin()); err != nil {
+		return nil, fmt.Errorf("failed to register base model plugin: %w", err)
+	}
+
 	// SQLDBインスタンスを取得
 	sqlDB, err := db.DB()
 	if err != nil {

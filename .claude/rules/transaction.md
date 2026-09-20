@@ -101,7 +101,7 @@ err := s.txManager.RunInTx(ctx, func(txCtx context.Context) error {
 ### ハンドラから直接呼ぶ場合（シンプルな CRUD・usecase なし）
 
 ```go
-func (h *xxxHandler) Update(c echo.Context) error {
+func (h *xxxHandler) Update(c *echo.Context) error {
     ctx := c.Request().Context()
 
     // バリデーション（トランザクション外）

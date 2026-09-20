@@ -2,6 +2,10 @@
 
 このファイルは AI エージェント（Claude Code / その他 AGENTS.md 対応ツール）向けの、このリポジトリのエントリーポイント。`AGENTS.md` はこのファイルへのシンボリックリンク。
 
+## 応答言語 🔴
+
+**ユーザーへの回答・コメント・コミットメッセージ・PR本文などの生成は日本語で行う。** コード自体（識別子・コメント内の技術用語等）やコマンド・ログ出力はこの限りではない。
+
 ## プロジェクト概要
 
 Go（Echo）+ Next.js（App Router）による Web アプリケーションテンプレート。認証込みの EC 商材サンプル実装を通じて、実運用を想定したレイヤー構成・エラーハンドリング・テスト方針を示すボイラープレート。詳細なセットアップ手順は [README.md](README.md)、UIデザイン（デザインシステム・画面仕様）は [DESIGN.md](DESIGN.md) を参照。バックエンドのアーキテクチャ設計判断は本ファイルの「アーキテクチャの設計判断」を参照。
@@ -63,6 +67,7 @@ pnpm format
 | `error-handling.md` | `pkg/errors`（ergo ベース）の使い方、機密情報をエラーに載せない方針 |
 | `context-propagation.md` | `context.Context` の伝搬方針、context に入れて良いもの／悪いもの |
 | `transaction.md` | `ITransactionManager` の使い方、外部API呼び出しとトランザクションを重ねない方針 |
+| `request-validation.md` | リクエスト型のバインド（`c.Bind` + `param`/`query`/`json` タグ）・`go-validator/v10` によるバリデーション（`ja` タグでエラーメッセージを日本語化）、リクエスト型のコメント方針 |
 | `testing.md` | Go / フロントエンドのテスト方針（テーブル駆動テスト、モック方針） |
 | `frontend.md` | Next.js のディレクトリ構成、データフェッチ（TanStack Query）、認証、禁止事項 |
 

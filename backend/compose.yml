@@ -36,6 +36,8 @@ services:
       PORT: 8080
       PROJECT_ID: app
       DATABASE_URL: user:P@ssw0rd@tcp(db:3306)/test?parseTime=true
+      FRONTEND_ORIGIN: http://localhost:3000
+      SESSION_SECRET: dev-insecure-session-secret-change-me
     volumes:
       - ./:/app
     ports:

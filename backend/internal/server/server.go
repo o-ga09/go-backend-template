@@ -9,27 +9,43 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/labstack/echo"
-	"github.com/labstack/echo/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
+
 	"github.com/o-ga09/go-backend-template/internal/router"
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
 	"github.com/o-ga09/go-backend-template/pkg/logger"
+	"github.com/o-ga09/go-backend-template/pkg/session"
+	"github.com/o-ga09/go-backend-template/pkg/validator"
 )
+
+// bodyLimitBytes はリクエストボディの上限(10MiB)。echo v5のmiddleware.BodyLimitは
+// バイト数(int64)を直接取る(v3/v4の"10M"のような文字列指定は廃止された)。
+const bodyLimitBytes = 10 << 20
 
 type Server struct {
 	Port   string
 	engine *echo.Echo
+	route  router.IRouting
 }
 
 func New(ctx context.Context) *Server {
 	cfg := Ctx.GetCfgFromCtx(ctx)
+	engine := echo.New()
+	engine.Validator = validator.New()
+	engine.Binder = validator.NewBinder()
+	rootAPI := engine.Group("/api")
 	return &Server{
 		Port:   cfg.Port,
-		engine: echo.New(),
+		engine: engine,
+		route:  router.New(rootAPI, *cfg),
 	}
 }
 
 func (s *Server) Run(ctx context.Context) error {
+	cfg := Ctx.GetCfgFromCtx(ctx)
+	sessionMgr := session.NewManager(cfg.SessionSecret, session.SessionTTL)
+
 	// ミドルウェアの設定
 	s.engine.Use(middleware.Recover())
 	s.engine.Use(AddID(ctx))
@@ -37,15 +53,16 @@ func (s *Server) Run(ctx context.Context) error {
 	s.engine.Use(RequestLogger())
 	s.engine.Use(SetDB())
 	s.engine.Use(WithTimeout())
-	s.engine.Use(CORS())
-	s.engine.Use(middleware.BodyLimit("10M"))
+	s.engine.Use(CORS(ctx))
+	s.engine.Use(Authenticate(sessionMgr))
+	s.engine.Use(middleware.BodyLimit(bodyLimitBytes))
 	s.engine.Use(middleware.Gzip())
 	s.engine.Use(ErrorHandler())
 
 	// ルーティングの設定
-	apiRoot := s.engine.Group("/api")
-	router.SetupApplicationRoute(apiRoot)
-	router.SetupSystemRoute(apiRoot)
+	s.route.SetupApplicationRoute()
+	s.route.SetupSystemRoute()
+
 	// サーバーの起動
 	port := fmt.Sprintf(":%s", s.Port)
 	srv := &http.Server{

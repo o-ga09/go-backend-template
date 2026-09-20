@@ -126,6 +126,24 @@ if err != nil {
 
 `MakeRateLimitError` / `MakeUnavailableError` は現時点の `pkg/errors` にはまだ無い。外部API連携など必要になった時点で `MakeNotFoundError` 等と同じ形（`ergo.Wrap` + `ergo.WithCode` + ログ出力）で追加する。
 
+## ctxを取れない箇所でのコード付与（`WithInvalidArgumentCode`）
+
+`Make*Error` は必ず `ctx` を取り、その場でログ出力する。しかし `echo.Validator`/`echo.Binder` インターフェース（`Validate(i any) error` / `Bind(c *echo.Context, target any) error`）のように、**呼び出し元の型が決まっていて `ctx` を追加できない**箇所がある（`pkg/validator` が実装例。`request-validation.md`）。
+
+このような箇所では `errors.WithInvalidArgumentCode(err)` で **422 のコードだけ**を事前に付与する（ログは出さない）。呼び出し元がその後 `ctx` を持つ地点（ハンドラ）で `errors.Wrap(ctx, err)` を呼べば、そこで初めてログが出力され、かつ事前に付与しておいたコードは `ergo.CodeOf` の Unwrap チェーン探索で保持されたまま引き継がれる。**`ErrTypeBussiness` ではラップしない**（`IsWrapped` が `true` になり `Wrap` がログを出さずに素通ししてしまうため。「ログ出力のタイミング」参照）。
+
+```go
+// pkg/validator/validator.go: ctxを持たないValidate(i any) errorの中
+return errors.WithInvalidArgumentCode(translate(i, verrs))
+
+// ハンドラ側: ctxがある地点でWrapするだけでログ出力・422変換が完結する
+if err := c.Validate(&req); err != nil {
+    return errors.Wrap(ctx, err)
+}
+```
+
+他の状況（`ctx` を渡せる通常のハンドラ・service・repository）では、これまで通り `Make*Error` を使う。`WithInvalidArgumentCode` は「`ctx` が取れない」という制約がある場合だけの例外。
+
 ## エラーのラップとログ
 
 - **ラップのみ**: 詳細不明の外部エラーは `errors.Wrap(ctx, err)` でラップする（ログも自動出力）

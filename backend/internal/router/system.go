@@ -1,20 +1,20 @@
 package router
 
 import (
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v5"
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
 )
 
-func SetupSystemRoute(root *echo.Group) {
-	system := root.Group("/system")
+func (r *route) SetupSystemRoute() {
+	system := r.rooAPI.Group("/system")
 
 	// ヘルスチェック
-	system.GET("/health", func(c echo.Context) error {
+	system.GET("/health", func(c *echo.Context) error {
 		return c.JSON(200, map[string]string{"status": "ok"})
 	})
 
 	// DBヘルスチェック
-	system.GET("/health/db", func(c echo.Context) error {
+	system.GET("/health/db", func(c *echo.Context) error {
 		db := Ctx.GetDBFromCtx(c.Request().Context())
 		sqlDB, err := db.DB()
 		if err != nil {
@@ -27,7 +27,7 @@ func SetupSystemRoute(root *echo.Group) {
 	})
 
 	// 時刻取得
-	system.GET("/time", func(c echo.Context) error {
+	system.GET("/time", func(c *echo.Context) error {
 		return c.JSON(200, map[string]string{"time": Ctx.GetRequestTime(c.Request().Context()).String()})
 	})
 }

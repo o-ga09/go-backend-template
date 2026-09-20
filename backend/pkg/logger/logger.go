@@ -44,7 +44,7 @@ func (h *traceHandler) Handle(ctx context.Context, r slog.Record) error {
 }
 
 func (h *traceHandler) WithAttr(attrs []slog.Attr) slog.Handler {
-	return &traceHandler{h.Handler.WithAttrs(attrs), h.projectID}
+	return &traceHandler{h.WithAttrs(attrs), h.projectID}
 }
 
 func (h *traceHandler) WithGroup(g string) slog.Handler {

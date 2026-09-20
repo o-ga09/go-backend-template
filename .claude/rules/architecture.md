@@ -69,7 +69,40 @@ func (c *Cart) CanCheckout() error { ... }
 if len(c.Items) == 0 { ... }
 ```
 
-現在の実装例: `auth`。新規ドメイン（EC商材の商品・カート・注文など）を追加する場合も、同じ2層構成に従う。
+現在の実装例: `user`（`internal/domain/user/`）。新規ドメイン（EC商材の商品・カート・注文など）を追加する場合も、同じ2層構成に従う。
+
+## 認可（所有者ベース）のパターン 🔴
+
+ログイン必須・本人のリソースのみアクセス可、という認可はハンドラ + domain + `pkg/authz` の組み合わせで実装する（`internal/handler/user.go` の `GetByID` が実装例）。
+
+1. **未ログイン（401）**: ハンドラの先頭で `Ctx.GetUserID(ctx)`（`pkg/context`）が空文字かどうかを見る。空なら `errors.MakeAuthorizedError(ctx, "authentication required")` を返す。`Authenticate` ミドルウェア（`internal/server/middleware.go`）はセッションCookieが無効/無い場合でもリクエストを拒否せず素通しするため、ログイン必須の判定は**必ずハンドラ側**で行う（`context-propagation.md`「認可ミドルウェア／ドメイン層で明示的に検証する」）
+2. **リソース取得**: `requesterID` を使わず対象リソースをリポジトリから取得する。見つからなければ通常どおり `errors.MakeNotFoundError`（404）
+3. **本人確認（403）**: 取得したリソースの domain メソッド（例: `(*User).IsOwnedBy(requesterID string) bool`）で所有者チェックする。この判定自体は `pkg/authz.IsOwner(requesterID, ownerID)` に委譲し、ハンドラはそのbool結果からエラーへの変換のみ行う
+
+```go
+// internal/domain/user/user.go
+func (u *User) IsOwnedBy(requesterID string) bool {
+    return authz.IsOwner(requesterID, u.ID)
+}
+
+// internal/handler/user.go
+requesterID := Ctx.GetUserID(ctx)
+if requesterID == "" {
+    return errors.MakeAuthorizedError(ctx, "authentication required")
+}
+u, err := h.repo.FindByID(ctx, req.ID)
+if err != nil {
+    if errors.Is(err, errors.ErrRecordNotFound) {
+        return errors.MakeNotFoundError(ctx, "user not found")
+    }
+    return errors.Wrap(ctx, err)
+}
+if !u.IsOwnedBy(requesterID) {
+    return errors.MakeAuthorizationError(ctx, "cannot access other user's resource")
+}
+```
+
+新規ドメイン（cart/order等）で所有者ベースの認可が必要な場合も、`pkg/authz.IsOwner` を再利用し、ドメインごとに認可ロジックを再実装しない。
 
 ## domain＝DBモデル・BaseModel・楽観ロック 🔴
 
@@ -116,9 +149,11 @@ if len(c.Items) == 0 { ... }
 
 コンストラクタで受け取った依存はメソッド内で nil チェックしない。
 
+このプロジェクトが使う echo v5（`github.com/labstack/echo/v5`）の `Context` は v4 以前と異なり **interface ではなく struct** なので、ハンドラ・ミドルウェアのシグネチャは `func(c *echo.Context) error`（`c echo.Context` ではなく `c *echo.Context`）になる。
+
 ```go
 // 誤: メソッド内に nil ガードを書く
-func (h *orderHandler) Create(c echo.Context) error {
+func (h *orderHandler) Create(c *echo.Context) error {
     if h.repo == nil {
         return nil
     }
@@ -126,7 +161,7 @@ func (h *orderHandler) Create(c echo.Context) error {
 }
 
 // 正: コンストラクタで依存を受け取り、メソッドはそのまま使う
-func (h *orderHandler) Create(c echo.Context) error {
+func (h *orderHandler) Create(c *echo.Context) error {
     res, err := h.repo.Create(ctx, order)
     ...
 }
@@ -135,3 +170,31 @@ func (h *orderHandler) Create(c echo.Context) error {
 - `if h.repo != nil`, `if h.client != nil` のような防御的チェックを実装メソッドに書かない
 - 必須の依存はコンストラクタ引数で明示し、nil を渡せないようにする
 - テスト用モックはインターフェースから `moq` で自動生成したものを使う
+
+### ハンドラも interface 越しに公開する 🔴
+
+- ハンドラ構造体は非公開（`orderHandler`）にし、そのハンドラが実装する公開インターフェース（`IOrder`）を `internal/handler/<name>.go` に定義する。`NewOrderHandler` はそのインターフェースを返す（domain のリポジトリ interface と同じ形。`package-structure.md`「interface の置き場所」）
+- **インターフェース名に `Handler` サフィックスを付けない。** `IOrderHandler` にすると呼び出し側で `handler.IOrderHandler` のようにパッケージ名（`handler`）と `Handler` が重複する。パッケージ名で「これはハンドラである」ことが分かるため、インターフェース名は対象リソース名（`IOrder`, `IUser`, `IAuth` 等）だけにする
+
+```go
+// internal/handler/order.go
+type orderHandler struct {
+    repo order.IOrderRepository
+}
+
+type IOrder interface {
+    Create(c *echo.Context) error
+    GetByID(c *echo.Context) error
+}
+
+func NewOrderHandler(repo order.IOrderRepository) IOrder {
+    return &orderHandler{repo: repo}
+}
+```
+
+- `internal/router/` はハンドラの具象型ではなく、この `IXxx` を受け取る/保持する（`internal/router/route.go` の `route` 構造体を参照）
+
+### ハンドラの依存の組み立ては `internal/router/route.go` に集約する 🔴
+
+- リポジトリ・セッションマネージャ等の生成と、それを注入したハンドラの構築（`New*Handler` の呼び出し）は **`internal/router/route.go` の `router.New(root, cfg)`** で行う。`internal/server/server.go`（`Server.Run`）では行わない
+- `Server.Run` は `router.New` が返す `IRouting`（`SetupApplicationRoute` / `SetupSystemRoute`）を呼ぶだけにする。サーバー起動処理（ミドルウェア登録・Listen）と依存の組み立てを分離するため
