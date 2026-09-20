@@ -1,0 +1,93 @@
+name: Security Checks
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    branches:
+      - "main"
+
+permissions:
+  contents: read
+
+jobs:
+  # シークレット検出。過去コミットも含めてスキャンするため fetch-depth: 0 が必要。
+  # 誤検知が出た場合は .gitleaks.toml でallowlistを追加する（新規シークレットの追加は禁止）。
+  gitleaks:
+    name: gitleaks (secret scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 検証済み（verified）のシークレットのみを対象にし、gitleaksと異なる検出ロジックで二重にチェックする。
+  trufflehog:
+    name: trufflehog (secret scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: trufflehog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+
+  # SAST。既存コードに対する初回導入のため、まずは検出結果をCode Scanningへ可視化するのみでブロックはしない。
+  # 検出内容が落ち着いたら continue-on-error を外してブロッキング化する。
+  sast:
+    name: semgrep (SAST)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: semgrep scan
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: auto
+          generateSarif: "1"
+      - name: upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+
+  # 依存関係の脆弱性チェック。トランジティブ依存の既知脆弱性が多く、修正には個別の依存更新作業が必要なため
+  # 現時点ではレポートのみ（ブロックしない）。棚卸し・更新は別タスクで対応する。
+  dependency-check:
+    name: dependency vulnerability scan
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - name: govulncheck (backend)
+        working-directory: backend
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: pnpm audit (frontend)
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm audit --audit-level=high
