@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/labstack/echo"
-	"github.com/labstack/echo/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
+
 	"github.com/o-ga09/go-backend-template/internal/database/mysql"
 	"github.com/o-ga09/go-backend-template/pkg/constant"
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
@@ -25,7 +26,7 @@ type RequestInfo struct {
 
 func AddID(ctx context.Context) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			ctx := Ctx.SetRequestID(ctx, uuid.GenerateID())
 			c.SetRequest(c.Request().WithContext(ctx))
 			return next(c)
@@ -35,7 +36,7 @@ func AddID(ctx context.Context) echo.MiddlewareFunc {
 
 func WithTimeout() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			ctx, cancel := context.WithTimeout(c.Request().Context(), 5*time.Second)
 			defer cancel()
 			c.SetRequest(c.Request().WithContext(ctx))
@@ -46,16 +47,19 @@ func WithTimeout() echo.MiddlewareFunc {
 
 func RequestLogger() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			start := time.Now()
 			req := c.Request()
 			slog.Log(req.Context(), constant.SeverityInfo, "処理開始", "request Id", Ctx.GetRequestID(req.Context()))
 
 			err := next(c)
 
-			res := c.Response()
+			status := http.StatusOK
+			if res, unwrapErr := echo.UnwrapResponse(c.Response()); unwrapErr == nil {
+				status = res.Status
+			}
 			r := &RequestInfo{
-				status:          res.Status,
+				status:          status,
 				contents_length: req.ContentLength,
 				method:          req.Method,
 				path:            req.URL.Path,
@@ -98,9 +102,9 @@ func CORS(ctx context.Context) echo.MiddlewareFunc {
 	return middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{cfg.FrontendOrigin},
 		AllowMethods: []string{
-			echo.POST,
-			echo.GET,
-			echo.OPTIONS,
+			http.MethodPost,
+			http.MethodGet,
+			http.MethodOptions,
 		},
 		AllowHeaders:     []string{"Content-Type"},
 		AllowCredentials: true,
@@ -115,7 +119,7 @@ func CORS(ctx context.Context) echo.MiddlewareFunc {
 // 判断する(context-propagation.md「認可ミドルウェア／ドメイン層で明示的に検証する」)。
 func Authenticate(mgr *session.Manager) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			ctx := c.Request().Context()
 
 			cookie, err := c.Cookie(session.CookieName)
@@ -132,7 +136,7 @@ func Authenticate(mgr *session.Manager) echo.MiddlewareFunc {
 
 func SetDB() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			ctx := c.Request().Context()
 			db, err := mysql.Connect(ctx)
 			if err != nil {
@@ -148,7 +152,7 @@ func SetDB() echo.MiddlewareFunc {
 
 func AddTime() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			ctx := Ctx.SetRequestTime(c.Request().Context(), time.Now())
 			c.SetRequest(c.Request().WithContext(ctx))
 			return next(c)
@@ -158,7 +162,7 @@ func AddTime() echo.MiddlewareFunc {
 
 func ErrorHandler() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			err := next(c)
 			if err != nil {
 				status, message := ErrCodeToStatusAndMessage(err)

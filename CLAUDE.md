@@ -63,7 +63,7 @@ pnpm format
 | `error-handling.md` | `pkg/errors`（ergo ベース）の使い方、機密情報をエラーに載せない方針 |
 | `context-propagation.md` | `context.Context` の伝搬方針、context に入れて良いもの／悪いもの |
 | `transaction.md` | `ITransactionManager` の使い方、外部API呼び出しとトランザクションを重ねない方針 |
-| `request-validation.md` | リクエスト型のバインド（`c.Bind` + `param`/`query`/`json` タグ）・`go-validator/v10` によるバリデーション、リクエスト型のコメント方針 |
+| `request-validation.md` | リクエスト型のバインド（`c.Bind` + `param`/`query`/`json` タグ）・`go-validator/v10` によるバリデーション（`ja` タグでエラーメッセージを日本語化）、リクエスト型のコメント方針 |
 | `testing.md` | Go / フロントエンドのテスト方針（テーブル駆動テスト、モック方針） |
 | `frontend.md` | Next.js のディレクトリ構成、データフェッチ（TanStack Query）、認証、禁止事項 |
 

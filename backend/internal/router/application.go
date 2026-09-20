@@ -1,7 +1,7 @@
 package router
 
 import (
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v5"
 
 	"github.com/o-ga09/go-backend-template/internal/handler"
 )

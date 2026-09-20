@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v5"
 
 	"github.com/o-ga09/go-backend-template/pkg/session"
 )
@@ -11,7 +11,7 @@ import (
 // setSessionCookie はセッションCookieを発行し、レスポンスにSet-Cookieヘッダーを追加する。
 // SameSite=None + Secure はフロントエンド(別オリジン)からcredentials: 'include'で
 // アクセスするために必須(backend/docs/auth.md参照)。
-func setSessionCookie(c echo.Context, mgr *session.Manager, userID string) {
+func setSessionCookie(c *echo.Context, mgr *session.Manager, userID string) {
 	token, expiresAt := mgr.Issue(userID)
 	c.SetCookie(&http.Cookie{
 		Name:     session.CookieName,
@@ -25,7 +25,7 @@ func setSessionCookie(c echo.Context, mgr *session.Manager, userID string) {
 }
 
 // clearSessionCookie はセッションCookieを失効させる(ログアウト)。
-func clearSessionCookie(c echo.Context) {
+func clearSessionCookie(c *echo.Context) {
 	c.SetCookie(&http.Cookie{
 		Name:     session.CookieName,
 		Value:    "",

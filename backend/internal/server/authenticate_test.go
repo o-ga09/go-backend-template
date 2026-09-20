@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v5"
 
 	"github.com/o-ga09/go-backend-template/internal/server"
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
@@ -39,7 +39,7 @@ func TestAuthenticate(t *testing.T) {
 
 			var gotUserID string
 			handlerCalled := false
-			next := func(c echo.Context) error {
+			next := func(c *echo.Context) error {
 				handlerCalled = true
 				gotUserID = Ctx.GetUserID(c.Request().Context())
 				return nil

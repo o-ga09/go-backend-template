@@ -8,13 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v5"
 
 	"github.com/o-ga09/go-backend-template/internal/domain/user"
 	moq "github.com/o-ga09/go-backend-template/internal/domain/user/mock"
 	"github.com/o-ga09/go-backend-template/internal/handler"
 	"github.com/o-ga09/go-backend-template/internal/server"
-	"github.com/o-ga09/go-backend-template/pkg/binder"
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
 	"github.com/o-ga09/go-backend-template/pkg/errors"
 	"github.com/o-ga09/go-backend-template/pkg/session"
@@ -24,12 +23,11 @@ import (
 
 // newTestContext はerrors.Make*Error(内部でlogger経由でRequestIDを参照する)を
 // panicさせないよう、RequestIDを設定したcontextを積んだecho.Contextを作る。
-func newTestContext(t *testing.T, method, path string, body string, userID string) (echo.Context, *httptest.ResponseRecorder) {
+func newTestContext(t *testing.T, method, path string, body string, userID string) (*echo.Context, *httptest.ResponseRecorder) {
 	t.Helper()
 
 	e := echo.New()
 	e.Validator = validator.New()
-	e.Binder = binder.New()
 	var req *http.Request
 	if body != "" {
 		req = httptest.NewRequest(method, path, strings.NewReader(body))
@@ -172,8 +170,7 @@ func TestUserHandler_GetByID(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			c, rec := newTestContext(t, http.MethodGet, "/api/users/:id", "", tc.requesterID)
-			c.SetParamNames("id")
-			c.SetParamValues(tc.targetID)
+			c.SetPathValues(echo.PathValues{{Name: "id", Value: tc.targetID}})
 
 			h := handler.NewUserHandler(tc.repo, session.NewManager("secret", time.Hour))
 			err := h.GetByID(c)

@@ -11,6 +11,7 @@
 |---|---|
 | `param` | パスパラメータ（例: `/users/:id` の `id`） |
 | `query` | クエリパラメータ |
+| `header` | リクエストヘッダー |
 | `json` | リクエストボディ（JSON） |
 
 ```go
@@ -36,13 +37,13 @@ if err := c.Bind(&req); err != nil {
 }
 ```
 
-このプロジェクトが使う echo v3（`labstack/echo` v3.3.10）の `DefaultBinder` は `param` タグを解釈しない（echo v4 にはあるが v3 にはない）。そのため `engine.Binder` には `pkg/binder.New()`（`param` タグのバインドを追加で行い、`query`/`json` は echo 標準の `DefaultBinder` に委譲するラッパー）を登録している（`internal/server/server.go`）。**ハンドラ・テストのどちらで `echo.New()` する場合も、`e.Binder = binder.New()` を設定すること。** 設定を忘れると `param` タグのフィールドが空のままバインドされ、`validate:"required"` で 422 になる。
+このプロジェクトが使う echo v5（`github.com/labstack/echo/v5`）の `DefaultBinder`（`engine.Binder` のデフォルト。明示的に差し替える必要はない）は `param`/`query`/`header` タグと、Content-Type に応じたボディ（`json` タグ等）を標準でバインドする。`Context` は v4 以前と異なり **interface ではなく struct** で、ハンドラ・ミドルウェアのシグネチャは `func(c *echo.Context) error` になる(`c echo.Context` ではなく `*echo.Context`)。
 
 ## バリデーション 🔴
 
 - 構造体の形式的なバリデーション（必須・フォーマット等）は **`go-playground/validator/v10`** の `validate:"..."` タグで宣言する
 - `c.Bind(&req)` の直後に **`c.Validate(&req)`** を呼ぶ。`engine.Validator` には `pkg/validator.New()` を登録している（`internal/server/server.go`）。ハンドラ・テストのどちらで `echo.New()` する場合も、`e.Validator = validator.New()` を設定すること
-- バリデーションエラーは `errors.MakeBusinessError(ctx, msg)`（422）に変換する
+- バリデーションエラーは `errors.MakeBusinessError(ctx, err.Error())`（422）に変換する。`pkg/validator` はエラーメッセージ自体を組み立てて返すため、`err.Error()` をそのまま渡す（静的な固定文言で上書きしない）
 
 ```go
 var req request.CreateUserRequest
@@ -50,7 +51,21 @@ if err := c.Bind(&req); err != nil {
     return errors.MakeBusinessError(ctx, "invalid request body")
 }
 if err := c.Validate(&req); err != nil {
-    return errors.MakeBusinessError(ctx, "invalid request body")
+    return errors.MakeBusinessError(ctx, err.Error())
+}
+```
+
+### バリデーションエラーメッセージの日本語化（`ja` タグ）🔴
+
+- クライアントに返すバリデーションエラーメッセージは **structタグ `ja` で宣言する**。`pkg/validator`（`go-playground/validator/v10` のラッパー）は、失敗したフィールドの `ja` タグの値をエラーメッセージとして使う
+- `ja` タグが無いフィールドは `go-playground/validator` のデフォルト（英語）メッセージにフォールバックする。**クライアントへ返すメッセージは必ず `ja` タグで指定すること**（フォールバックはあくまで安全側の保険であり、意図して使うものではない）
+- 複数フィールドが同時に違反した場合、`pkg/validator.ValidationError` は各メッセージを `、` で連結して返す
+
+```go
+type CreateUserRequest struct {
+    UID         string `json:"uid" validate:"required" ja:"uidは必須です"`
+    DisplayName string `json:"displayName" validate:"required" ja:"displayNameは必須です"`
+    Email       string `json:"email,omitempty" validate:"omitempty,email" ja:"emailの形式が正しくありません"`
 }
 ```
 
@@ -76,8 +91,8 @@ type CreateUserRequest struct {
 
 // 正: 自明なフィールドにはコメントを書かない。必要な場合のみインラインで
 type CreateUserRequest struct {
-    UID          string `json:"uid" validate:"required"`
-    DisplayName  string `json:"displayName" validate:"required"`
-    Email        string `json:"email,omitempty" validate:"omitempty,email"` // 省略時はUIDから生成する
+    UID          string `json:"uid" validate:"required" ja:"uidは必須です"`
+    DisplayName  string `json:"displayName" validate:"required" ja:"displayNameは必須です"`
+    Email        string `json:"email,omitempty" validate:"omitempty,email" ja:"emailの形式が正しくありません"` // 省略時はUIDから生成する
 }
 ```

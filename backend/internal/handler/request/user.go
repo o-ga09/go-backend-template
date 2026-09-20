@@ -13,13 +13,13 @@ package request
 // NextAuthセッションのメールアドレスを送るようになった際に使われる、
 // 現時点ではオプショナルなフィールドとして定義しておく。
 type CreateUserRequest struct {
-	UID          string `json:"uid" validate:"required"`
-	DisplayName  string `json:"displayName" validate:"required"`
+	UID          string `json:"uid" validate:"required" ja:"uidは必須です"`
+	DisplayName  string `json:"displayName" validate:"required" ja:"displayNameは必須です"`
 	ProfileImage string `json:"profileImage"`
-	Email        string `json:"email,omitempty" validate:"omitempty,email"` // 省略時はUIDから生成する
+	Email        string `json:"email,omitempty" validate:"omitempty,email" ja:"emailの形式が正しくありません"` // 省略時はUIDから生成する
 }
 
 // GetUserRequest はユーザー取得リクエストのパスパラメータ。
 type GetUserRequest struct {
-	ID string `param:"id" validate:"required"`
+	ID string `param:"id" validate:"required" ja:"idは必須です"`
 }

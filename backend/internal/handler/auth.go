@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v5"
 
 	"github.com/o-ga09/go-backend-template/internal/domain/user"
 	"github.com/o-ga09/go-backend-template/internal/handler/response"
@@ -24,7 +24,7 @@ func NewAuthHandler(repo user.IUserRepository) *AuthHandler {
 // CurrentUser はログイン中ユーザー情報を返す。セッションが無い/無効な場合は401を返す
 // (フロントエンドはレスポンスが非2xxであれば未ログイン扱いにする)。
 // GET /api/auth/user
-func (h *AuthHandler) CurrentUser(c echo.Context) error {
+func (h *AuthHandler) CurrentUser(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	userID := Ctx.GetUserID(ctx)
@@ -47,7 +47,7 @@ func (h *AuthHandler) CurrentUser(c echo.Context) error {
 
 // Logout はセッションCookieを失効させる。DBアクセスは不要で常に成功する。
 // POST /api/auth/logout
-func (h *AuthHandler) Logout(c echo.Context) error {
+func (h *AuthHandler) Logout(c *echo.Context) error {
 	clearSessionCookie(c)
 	return c.NoContent(http.StatusOK)
 }

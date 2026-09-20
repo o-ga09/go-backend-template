@@ -9,13 +9,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/labstack/echo"
-	"github.com/labstack/echo/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 
 	"github.com/o-ga09/go-backend-template/internal/database/mysql"
 	"github.com/o-ga09/go-backend-template/internal/handler"
 	"github.com/o-ga09/go-backend-template/internal/router"
-	"github.com/o-ga09/go-backend-template/pkg/binder"
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
 	"github.com/o-ga09/go-backend-template/pkg/logger"
 	"github.com/o-ga09/go-backend-template/pkg/session"
@@ -25,6 +24,10 @@ import (
 // sessionTTL はバックエンド発行セッションCookieの有効期間(backend/docs/auth.md参照)。
 const sessionTTL = 7 * 24 * time.Hour
 
+// bodyLimitBytes はリクエストボディの上限(10MiB)。echo v5のmiddleware.BodyLimitは
+// バイト数(int64)を直接取る(v3/v4の"10M"のような文字列指定は廃止された)。
+const bodyLimitBytes = 10 << 20
+
 type Server struct {
 	Port   string
 	engine *echo.Echo
@@ -33,8 +36,10 @@ type Server struct {
 func New(ctx context.Context) *Server {
 	cfg := Ctx.GetCfgFromCtx(ctx)
 	engine := echo.New()
+	// engine.Binderはデフォルト(echo.DefaultBinder)のままでよい。echo v5の
+	// DefaultBinderはparam(パスパラメータ)/query(クエリパラメータ)/json(リクエストボディ)
+	// タグを標準でバインドする(request-validation.md参照)。
 	engine.Validator = validator.New()
-	engine.Binder = binder.New()
 	return &Server{
 		Port:   cfg.Port,
 		engine: engine,
@@ -59,7 +64,7 @@ func (s *Server) Run(ctx context.Context) error {
 	s.engine.Use(WithTimeout())
 	s.engine.Use(CORS(ctx))
 	s.engine.Use(Authenticate(sessionMgr))
-	s.engine.Use(middleware.BodyLimit("10M"))
+	s.engine.Use(middleware.BodyLimit(bodyLimitBytes))
 	s.engine.Use(middleware.Gzip())
 	s.engine.Use(ErrorHandler())
 

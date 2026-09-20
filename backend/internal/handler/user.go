@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v5"
 
 	"github.com/o-ga09/go-backend-template/internal/domain/user"
 	"github.com/o-ga09/go-backend-template/internal/handler/request"
@@ -29,7 +29,7 @@ func NewUserHandler(repo user.IUserRepository, sessionMgr *session.Manager) *Use
 // Create は初回ログイン時のユーザー作成(または既存ユーザーの特定)を行い、
 // セッションCookieを発行する。
 // POST /api/users
-func (h *UserHandler) Create(c echo.Context) error {
+func (h *UserHandler) Create(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	var req request.CreateUserRequest
@@ -37,7 +37,7 @@ func (h *UserHandler) Create(c echo.Context) error {
 		return errors.MakeBusinessError(ctx, "invalid request body")
 	}
 	if err := c.Validate(&req); err != nil {
-		return errors.MakeBusinessError(ctx, "invalid request body")
+		return errors.MakeBusinessError(ctx, err.Error())
 	}
 
 	if err := user.CanCreate(req.UID, req.DisplayName); err != nil {
@@ -80,7 +80,7 @@ func (h *UserHandler) Create(c echo.Context) error {
 // 本人以外のリソースへのアクセスは403で拒否する(認可はdomain.User.IsOwnedByに
 // 委譲。architecture.md「ドメイン層のルール」)。
 // GET /api/users/:id
-func (h *UserHandler) GetByID(c echo.Context) error {
+func (h *UserHandler) GetByID(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	requesterID := Ctx.GetUserID(ctx)
@@ -93,7 +93,7 @@ func (h *UserHandler) GetByID(c echo.Context) error {
 		return errors.MakeBusinessError(ctx, "invalid request")
 	}
 	if err := c.Validate(&req); err != nil {
-		return errors.MakeBusinessError(ctx, "invalid request")
+		return errors.MakeBusinessError(ctx, err.Error())
 	}
 
 	u, err := h.repo.FindByID(ctx, req.ID)
