@@ -20,17 +20,15 @@ const mysqlErrDuplicateEntry = 1062
 // (transaction.mdのITransactionManagerと同じ理由: DB接続はSetDBミドルウェアが
 // リクエストごとにcontextへ格納するため、リポジトリ自体はステートレスにする)。
 // リポジトリはデータの読み書きのみを行い、ビジネスロジックを持たない。
-type UserRepository struct{}
+type userRepository struct{}
 
 // NewUserRepository はUserRepositoryを生成する。
-func NewUserRepository() *UserRepository {
-	return &UserRepository{}
+func NewUserRepository() user.IUserRepository {
+	return &userRepository{}
 }
 
-var _ user.IUserRepository = (*UserRepository)(nil)
-
 // FindByID はIDでユーザーを検索する。
-func (r *UserRepository) FindByID(ctx context.Context, id string) (*user.User, error) {
+func (r *userRepository) FindByID(ctx context.Context, id string) (*user.User, error) {
 	db := Ctx.GetDBFromCtx(ctx)
 
 	var u user.User
@@ -44,7 +42,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id string) (*user.User, e
 }
 
 // FindByGoogleSub はGoogleのsubでユーザーを検索する。
-func (r *UserRepository) FindByGoogleSub(ctx context.Context, googleSub string) (*user.User, error) {
+func (r *userRepository) FindByGoogleSub(ctx context.Context, googleSub string) (*user.User, error) {
 	db := Ctx.GetDBFromCtx(ctx)
 
 	var u user.User
@@ -58,7 +56,7 @@ func (r *UserRepository) FindByGoogleSub(ctx context.Context, googleSub string) 
 }
 
 // Create はユーザーを新規作成する。ID/Version/タイムスタンプはBaseModelPluginが採番する。
-func (r *UserRepository) Create(ctx context.Context, u *user.User) error {
+func (r *userRepository) Create(ctx context.Context, u *user.User) error {
 	db := Ctx.GetDBFromCtx(ctx)
 
 	if err := db.WithContext(ctx).Create(u).Error; err != nil {
@@ -72,7 +70,7 @@ func (r *UserRepository) Create(ctx context.Context, u *user.User) error {
 
 // Update はユーザーを更新する。楽観ロック(WHERE version = ?)はBaseModelPluginが
 // 自動的に付与する。競合時はerrors.ErrOptimisticLockConflictを返す。
-func (r *UserRepository) Update(ctx context.Context, u *user.User) error {
+func (r *userRepository) Update(ctx context.Context, u *user.User) error {
 	db := Ctx.GetDBFromCtx(ctx)
 
 	err := db.WithContext(ctx).Model(u).Updates(map[string]interface{}{
