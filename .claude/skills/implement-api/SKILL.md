@@ -24,7 +24,7 @@ description: >
    - フィールドごとに独立した doc コメントは書かない。必要な場合のみ行末にインラインコメントを書く
 4. **ハンドラーを実装する**（`internal/handler/<name>.go`。`internal/handler/user.go` / `auth.go` を参照）
    - シンプルな CRUD はハンドラが domain のリポジトリを直接呼ぶ（usecase 層を作らない）
-   - ハンドラ構造体は非公開（`xxxHandler`）にし、公開インターフェース `IXxxHandler` を定義して `NewXxxHandler` はそれを返す（`domain` のリポジトリ interface と同じ形。`package-structure.md`）
+   - ハンドラ構造体は非公開（`xxxHandler`）にし、公開インターフェース `IXxx`（`Handler` サフィックスは付けない。`handler.IXxxHandler` のような重複を避けるため）を定義して `NewXxxHandler` はそれを返す（`domain` のリポジトリ interface と同じ形。`package-structure.md`）
    - リクエストは `c.Param()`/`c.QueryParam()` を直書きせず、`c.Bind(&req)` → `c.Validate(&req)` の順で読み取る（ハンドラ・ミドルウェアのシグネチャは echo v5 に合わせ `func(c *echo.Context) error`）
    - ログインを必須とするエンドポイントは `Ctx.GetUserID(ctx)` が空なら `errors.MakeAuthorizedError`（401）で拒否し、対象リソース取得後に所有者チェック（domain の `IsOwnedBy` 等 + `pkg/authz.IsOwner`）で `errors.MakeAuthorizationError`（403）を返す（`architecture.md`「認可（所有者ベース）のパターン」）
    - 複数テーブルへの書き込みがある場合のみ `internal/database` の `ITransactionManager.RunInTx` でラップする

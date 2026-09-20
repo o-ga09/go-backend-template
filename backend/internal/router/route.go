@@ -10,8 +10,8 @@ import (
 
 type route struct {
 	rooAPI *echo.Group
-	user   handler.IUserHandler
-	auth   handler.IAuthHandler
+	user   handler.IUser
+	auth   handler.IAuth
 }
 
 type IRouting interface {

@@ -16,13 +16,15 @@ type authHandler struct {
 	repo user.IUserRepository
 }
 
-type IAuthHandler interface {
+// IAuth はAuthHandlerの公開インターフェース。「handler.IAuthHandler」のように
+// パッケージ名(handler)とHandlerが重複しないよう、Handlerサフィックスは付けない。
+type IAuth interface {
 	CurrentUser(c *echo.Context) error
 	Logout(c *echo.Context) error
 }
 
 // NewAuthHandler はAuthHandlerを生成する。
-func NewAuthHandler(repo user.IUserRepository) IAuthHandler {
+func NewAuthHandler(repo user.IUserRepository) IAuth {
 	return &authHandler{repo: repo}
 }
 

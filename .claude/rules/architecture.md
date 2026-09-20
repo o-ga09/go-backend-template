@@ -173,7 +173,8 @@ func (h *orderHandler) Create(c *echo.Context) error {
 
 ### ハンドラも interface 越しに公開する 🔴
 
-- ハンドラ構造体は非公開（`orderHandler`）にし、そのハンドラが実装する公開インターフェース（`IOrderHandler`）を `internal/handler/<name>.go` に定義する。`NewOrderHandler` はそのインターフェースを返す（domain のリポジトリ interface と同じ形。`package-structure.md`「interface の置き場所」）
+- ハンドラ構造体は非公開（`orderHandler`）にし、そのハンドラが実装する公開インターフェース（`IOrder`）を `internal/handler/<name>.go` に定義する。`NewOrderHandler` はそのインターフェースを返す（domain のリポジトリ interface と同じ形。`package-structure.md`「interface の置き場所」）
+- **インターフェース名に `Handler` サフィックスを付けない。** `IOrderHandler` にすると呼び出し側で `handler.IOrderHandler` のようにパッケージ名（`handler`）と `Handler` が重複する。パッケージ名で「これはハンドラである」ことが分かるため、インターフェース名は対象リソース名（`IOrder`, `IUser`, `IAuth` 等）だけにする
 
 ```go
 // internal/handler/order.go
@@ -181,17 +182,17 @@ type orderHandler struct {
     repo order.IOrderRepository
 }
 
-type IOrderHandler interface {
+type IOrder interface {
     Create(c *echo.Context) error
     GetByID(c *echo.Context) error
 }
 
-func NewOrderHandler(repo order.IOrderRepository) IOrderHandler {
+func NewOrderHandler(repo order.IOrderRepository) IOrder {
     return &orderHandler{repo: repo}
 }
 ```
 
-- `internal/router/` はハンドラの具象型ではなく、この `IXxxHandler` を受け取る/保持する（`internal/router/route.go` の `route` 構造体を参照）
+- `internal/router/` はハンドラの具象型ではなく、この `IXxx` を受け取る/保持する（`internal/router/route.go` の `route` 構造体を参照）
 
 ### ハンドラの依存の組み立ては `internal/router/route.go` に集約する 🔴
 

@@ -22,7 +22,7 @@ backend/
 │   │   ├── entity.go      # 型定義・インターフェース・go:generate コメント
 │   │   ├── <name>.go      # ドメインメソッド
 │   │   └── mock/          # moq 自動生成モック
-│   ├── handler/           # Echo ハンドラ（1ファイル=1リソース）。IXxxHandlerを返す
+│   ├── handler/           # Echo ハンドラ（1ファイル=1リソース）。IXxx（Handlerサフィックス無し）を返す
 │   │   ├── request/       # リクエスト型
 │   │   ├── response/      # レスポンス型
 │   │   └── cookie.go      # setSessionCookie等、複数ハンドラで共有するヘルパー
@@ -91,4 +91,4 @@ type IOrderRepository interface {
 
 **外部サービスクライアントも必ずインターフェース越しに使う。** テストで実APIを叩かないため（`testing.md`）。
 
-**ハンドラも同じ形で公開する。** `internal/handler/<name>.go` で非公開の構造体（`xxxHandler`）を実装し、公開インターフェース（`IXxxHandler`）を定義して `NewXxxHandler` はそれを返す。`internal/router/` はこのインターフェース越しにハンドラを保持する（`architecture.md`「ハンドラも interface 越しに公開する」）。
+**ハンドラも同じ形で公開する。** `internal/handler/<name>.go` で非公開の構造体（`xxxHandler`）を実装し、公開インターフェース（`IXxx`。`Handler` サフィックスは付けない。`handler.IXxxHandler` のようなパッケージ名との重複を避けるため）を定義して `NewXxxHandler` はそれを返す。`internal/router/` はこのインターフェース越しにハンドラを保持する（`architecture.md`「ハンドラも interface 越しに公開する」）。

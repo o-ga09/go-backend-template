@@ -21,13 +21,15 @@ type userHandler struct {
 	sessionMgr *session.Manager
 }
 
-type IUserHandler interface {
+// IUser はUserHandlerの公開インターフェース。「handler.IUserHandler」のように
+// パッケージ名(handler)とHandlerが重複しないよう、Handlerサフィックスは付けない。
+type IUser interface {
 	GetByID(c *echo.Context) error
 	Create(c *echo.Context) error
 }
 
 // NewUserHandler はUserHandlerを生成する。
-func NewUserHandler(repo user.IUserRepository, sessionMgr *session.Manager) IUserHandler {
+func NewUserHandler(repo user.IUserRepository, sessionMgr *session.Manager) IUser {
 	return &userHandler{repo: repo, sessionMgr: sessionMgr}
 }
 
