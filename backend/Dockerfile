@@ -7,7 +7,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 
-RUN go build -trimpath -ldflags "-w -s" -o main ./cmd/main.go
+RUN go build -trimpath -ldflags "-w -s" -o main ./cmd/api
 
 #-----------------------------------------------
 #API デプロイ用コンアテナ
