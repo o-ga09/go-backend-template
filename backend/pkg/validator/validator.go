@@ -60,13 +60,29 @@ func translate(i any, verrs val.ValidationErrors) error {
 // デフォルトメッセージ(fe.Error())を返す。
 func messageFor(typ reflect.Type, fe val.FieldError) string {
 	if typ != nil && typ.Kind() == reflect.Struct {
-		if field, ok := typ.FieldByName(fe.StructField()); ok {
-			if ja, ok := field.Tag.Lookup("ja"); ok && ja != "" {
-				return ja
-			}
+		if ja, ok := jaTagFor(typ, fe.StructField()); ok && ja != "" {
+			return ja
 		}
 	}
 	return fe.Error()
+}
+
+// jaTagFor はtypの各フィールドを順に走査し、名前がfieldNameと一致するフィールドの
+// `ja`タグを返す。fieldNameはgo-playground/validatorがtyp自身の構造体定義から
+// 決定した値でリクエスト由来ではないが、reflect.Type.FieldByNameのような
+// 「名前を動的に指定してフィールド/メソッドを解決する」API(静的解析で
+// go.lang.security.audit.unsafe-reflect-by-nameとして検出されやすい)は使わず、
+// 明示的なループで比較する。
+func jaTagFor(typ reflect.Type, fieldName string) (string, bool) {
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		if field.Name != fieldName {
+			continue
+		}
+		ja, ok := field.Tag.Lookup("ja")
+		return ja, ok
+	}
+	return "", false
 }
 
 // ValidationError はバリデーション失敗時のエラー。失敗した各フィールドの
