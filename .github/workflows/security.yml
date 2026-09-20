@@ -40,17 +40,19 @@ jobs:
           extra_args: --only-verified
 
   # SAST。既存コードに対する初回導入のため、まずは検出結果をCode Scanningへ可視化するのみでブロックはしない。
-  # 検出内容が落ち着いたら continue-on-error を外してブロッキング化する。
+  # ジョブ単位ではなくステップ単位で continue-on-error を付け、PR上のチェックが failure 表示にならないようにする
+  # （ジョブ単位の continue-on-error はワークフロー全体は成功にするが、そのジョブ自体のチェックはfailureのまま表示されるため）。
+  # 検出内容が落ち着いたら継続:falseに外してブロッキング化する。
   sast:
     name: semgrep (SAST)
     runs-on: ubuntu-latest
     permissions:
       contents: read
       security-events: write
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: semgrep scan
+        continue-on-error: true
         uses: semgrep/semgrep-action@v1
         with:
           config: auto
@@ -63,10 +65,10 @@ jobs:
 
   # 依存関係の脆弱性チェック。トランジティブ依存の既知脆弱性が多く、修正には個別の依存更新作業が必要なため
   # 現時点ではレポートのみ（ブロックしない）。棚卸し・更新は別タスクで対応する。
+  # sastジョブと同じ理由で continue-on-error は各ステップに付ける。
   dependency-check:
     name: dependency vulnerability scan
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Set up Go
@@ -74,6 +76,7 @@ jobs:
         with:
           go-version: "1.25"
       - name: govulncheck (backend)
+        continue-on-error: true
         working-directory: backend
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
       - name: Set up pnpm
@@ -86,8 +89,10 @@ jobs:
           node-version: 18
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
-      - name: pnpm audit (frontend)
+      - name: pnpm install (frontend)
         working-directory: frontend
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm audit --audit-level=high
+        run: pnpm install --frozen-lockfile
+      - name: pnpm audit (frontend)
+        continue-on-error: true
+        working-directory: frontend
+        run: pnpm audit --audit-level=high
