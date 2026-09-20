@@ -40,9 +40,11 @@ jobs:
           extra_args: --only-verified
 
   # SAST。既存コードに対する初回導入のため、まずは検出結果をCode Scanningへ可視化するのみでブロックはしない。
-  # ジョブ単位ではなくステップ単位で continue-on-error を付け、PR上のチェックが failure 表示にならないようにする
-  # （ジョブ単位の continue-on-error はワークフロー全体は成功にするが、そのジョブ自体のチェックはfailureのまま表示されるため）。
-  # 検出内容が落ち着いたら継続:falseに外してブロッキング化する。
+  # semgrep CLIを直接使う（semgrep/semgrep-actionのDockerラッパーはSARIF出力パスが安定せず
+  # upload-sarif側で "Path does not exist" になったため採用しない）。
+  # `semgrep scan` はfindingsがあっても既定でexit 0（--errorを付けない限りブロックしない）ため、
+  # continue-on-errorは異常終了時の保険として残す。
+  # 検出内容が落ち着いたら --error を付けてブロッキング化する。
   sast:
     name: semgrep (SAST)
     runs-on: ubuntu-latest
@@ -51,14 +53,17 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install semgrep
+        run: pip install semgrep
       - name: semgrep scan
         continue-on-error: true
-        uses: semgrep/semgrep-action@v1
-        with:
-          config: auto
-          generateSarif: "1"
+        run: semgrep scan --config auto --sarif --output semgrep.sarif
       - name: upload SARIF
-        if: always()
+        if: always() && hashFiles('semgrep.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: semgrep.sarif
