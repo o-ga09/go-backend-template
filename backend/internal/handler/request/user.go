@@ -1,4 +1,4 @@
-// Package request はハンドラが受け取るHTTPリクエストボディの型を定義する。
+// Package request はハンドラが受け取るHTTPリクエストのパラメータ型を定義する。
 package request
 
 // CreateUserRequest はユーザー作成(初回ログイン時)リクエストのボディ。
@@ -13,13 +13,13 @@ package request
 // NextAuthセッションのメールアドレスを送るようになった際に使われる、
 // 現時点ではオプショナルなフィールドとして定義しておく。
 type CreateUserRequest struct {
-	// UID はGoogleのsub(NextAuthのセッションから取得される一意な識別子)。
-	UID string `json:"uid"`
-	// DisplayName はユーザーの表示名。usersテーブルのnameカラムに保存する。
-	DisplayName string `json:"displayName"`
-	// ProfileImage はプロフィール画像URL。現時点では永続化するカラムが
-	// 存在しないため保存しない(レスポンスには空文字で含める)。
+	UID          string `json:"uid" validate:"required"`
+	DisplayName  string `json:"displayName" validate:"required"`
 	ProfileImage string `json:"profileImage"`
-	// Email はメールアドレス(オプショナル)。省略時はUIDから生成する。
-	Email string `json:"email,omitempty"`
+	Email        string `json:"email,omitempty" validate:"omitempty,email"` // 省略時はUIDから生成する
+}
+
+// GetUserRequest はユーザー取得リクエストのパスパラメータ。
+type GetUserRequest struct {
+	ID string `param:"id" validate:"required"`
 }

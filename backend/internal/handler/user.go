@@ -36,6 +36,9 @@ func (h *UserHandler) Create(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return errors.MakeBusinessError(ctx, "invalid request body")
 	}
+	if err := c.Validate(&req); err != nil {
+		return errors.MakeBusinessError(ctx, "invalid request body")
+	}
 
 	if err := user.CanCreate(req.UID, req.DisplayName); err != nil {
 		return errors.MakeBusinessError(ctx, "user create request is invalid")
@@ -85,8 +88,15 @@ func (h *UserHandler) GetByID(c echo.Context) error {
 		return errors.MakeAuthorizedError(ctx, "authentication required")
 	}
 
-	id := c.Param("id")
-	u, err := h.repo.FindByID(ctx, id)
+	var req request.GetUserRequest
+	if err := c.Bind(&req); err != nil {
+		return errors.MakeBusinessError(ctx, "invalid request")
+	}
+	if err := c.Validate(&req); err != nil {
+		return errors.MakeBusinessError(ctx, "invalid request")
+	}
+
+	u, err := h.repo.FindByID(ctx, req.ID)
 	if err != nil {
 		if errors.Is(err, errors.ErrRecordNotFound) {
 			return errors.MakeNotFoundError(ctx, "user not found")

@@ -14,10 +14,12 @@ import (
 	moq "github.com/o-ga09/go-backend-template/internal/domain/user/mock"
 	"github.com/o-ga09/go-backend-template/internal/handler"
 	"github.com/o-ga09/go-backend-template/internal/server"
+	"github.com/o-ga09/go-backend-template/pkg/binder"
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
 	"github.com/o-ga09/go-backend-template/pkg/errors"
 	"github.com/o-ga09/go-backend-template/pkg/session"
 	"github.com/o-ga09/go-backend-template/pkg/uuid"
+	"github.com/o-ga09/go-backend-template/pkg/validator"
 )
 
 // newTestContext はerrors.Make*Error(内部でlogger経由でRequestIDを参照する)を
@@ -26,6 +28,8 @@ func newTestContext(t *testing.T, method, path string, body string, userID strin
 	t.Helper()
 
 	e := echo.New()
+	e.Validator = validator.New()
+	e.Binder = binder.New()
 	var req *http.Request
 	if body != "" {
 		req = httptest.NewRequest(method, path, strings.NewReader(body))

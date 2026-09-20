@@ -15,9 +15,11 @@ import (
 	"github.com/o-ga09/go-backend-template/internal/database/mysql"
 	"github.com/o-ga09/go-backend-template/internal/handler"
 	"github.com/o-ga09/go-backend-template/internal/router"
+	"github.com/o-ga09/go-backend-template/pkg/binder"
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
 	"github.com/o-ga09/go-backend-template/pkg/logger"
 	"github.com/o-ga09/go-backend-template/pkg/session"
+	"github.com/o-ga09/go-backend-template/pkg/validator"
 )
 
 // sessionTTL はバックエンド発行セッションCookieの有効期間(backend/docs/auth.md参照)。
@@ -30,9 +32,12 @@ type Server struct {
 
 func New(ctx context.Context) *Server {
 	cfg := Ctx.GetCfgFromCtx(ctx)
+	engine := echo.New()
+	engine.Validator = validator.New()
+	engine.Binder = binder.New()
 	return &Server{
 		Port:   cfg.Port,
-		engine: echo.New(),
+		engine: engine,
 	}
 }
 
