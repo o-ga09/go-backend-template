@@ -23,16 +23,16 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2
       - name: Set up Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@bfdd3570ce990073878bf10f6b2d79082de49492 # v2
         with:
           go-version: 1.25
       - name: testing
         run: |
           go test ./... -coverprofile=coverage.out
       - name: create report
-        uses: k1LoW/octocov-action@v0
+        uses: k1LoW/octocov-action@7a27b0b5cd308ab8b5096a9ef1ba701502a1ce6a # v0
         continue-on-error: true
         with:
           config: backend/.octocov.yml
@@ -41,9 +41,9 @@ jobs:
       runs-on: ubuntu-latest
       steps:
         - name: Check out code into the Go module directory
-          uses: actions/checkout@v3
+          uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3
         - name: golangci-lint
-          uses: reviewdog/action-golangci-lint@v2
+          uses: reviewdog/action-golangci-lint@c76cceaaab89abe74e649d2e34c6c9adc26662d2 # v2
           with:
             github_token: ${{ secrets.GITHUB_TOKEN }}
             workdir: backend
