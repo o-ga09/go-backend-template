@@ -8,7 +8,7 @@ import (
 
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
-	"github.com/o-ga09/go-backend-template/internal/infra/database/mysql"
+	"github.com/o-ga09/go-backend-template/internal/database/mysql"
 	"github.com/o-ga09/go-backend-template/pkg/constant"
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
 	"github.com/o-ga09/go-backend-template/pkg/errors"

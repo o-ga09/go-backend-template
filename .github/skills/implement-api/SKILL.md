@@ -19,7 +19,7 @@ description: >
    - ビジネスロジックを持たせない。データの読み書きのみ
 3. **ハンドラーを実装する**（`internal/handler/<name>.go`）
    - シンプルな CRUD はハンドラが domain のリポジトリを直接呼ぶ（usecase 層を作らない）
-   - 複数テーブルへの書き込みがある場合のみ `internal/infra/database/transaction.ITransactionManager.RunInTx` でラップする
+   - 複数テーブルへの書き込みがある場合のみ `internal/database/transaction.ITransactionManager.RunInTx` でラップする
    - 複雑なオーケストレーション（複数リポジトリ・外部 API 呼び出しの組み合わせ）が必要な場合のみ `internal/service/` を挟む
 4. **エラーハンドリング**
    - `pkg/errors` の `Make*Error` / `errors.Wrap` を使う。`fmt.Errorf` や標準 `errors.New` を直接使わない

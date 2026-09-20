@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 
-	"github.com/o-ga09/go-backend-template/internal/infra/database"
+	"github.com/o-ga09/go-backend-template/internal/database"
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
 )
 

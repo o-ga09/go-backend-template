@@ -16,7 +16,7 @@ backend/                    # Go API サーバー (Echo framework)
 │   ├── domain/             # ドメインモデル・ビジネスロジック
 │   ├── handler/            # HTTPハンドラー (Controller層)
 │   ├── service/            # アプリケーションサービス
-│   ├── infra/database/     # DB接続・インフラ層
+│   ├── database/           # DB接続・GORMリポジトリ・トランザクション管理
 │   ├── router/             # ルーティング定義
 │   └── server/             # HTTPサーバー・ミドルウェア
 ├── pkg/                    # 共有パッケージ (config, logger, errors, context)
