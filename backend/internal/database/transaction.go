@@ -14,7 +14,8 @@ import (
 // internal/database(internal/database/mysqlと同じ階層)に置く。
 type ITransactionManager interface {
 	// RunInTx はfnをトランザクション内で実行する。fnがエラーを返すとロールバック
-	// し、そのエラーをそのまま返す。fnがnilを返すとコミットする。
+	// し、そのエラーをそのまま返す(errors.Wrap等でラップしない。呼び出し元が
+	// 必要に応じてラップ・種別変換する)。fnがnilを返すとコミットする。
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 

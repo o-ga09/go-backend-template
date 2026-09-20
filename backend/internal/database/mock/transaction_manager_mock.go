@@ -32,6 +32,9 @@ var _ database.ITransactionManager = (*ITransactionManagerMock)(nil)
 
 // RunInTx はRunInTxFuncを呼び出し、呼び出し履歴を記録する。
 func (m *ITransactionManagerMock) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	if m.RunInTxFunc == nil {
+		panic("ITransactionManagerMock.RunInTxFunc: method is nil but ITransactionManager.RunInTx was just called")
+	}
 	m.lockRunInTx.Lock()
 	m.calls.RunInTx = append(m.calls.RunInTx, struct {
 		Ctx context.Context

@@ -16,8 +16,11 @@ import (
 )
 
 // testing.md「DBは実DBを使う」に従い、実際のMySQL(docker composeで起動したもの)に
-// 接続してテストする。DATABASE_URLが未設定/接続不可の場合はスキップする。
-// internal/database/mysql/user_test.goのsetupCtxと同じパターン。
+// 接続してテストする。DATABASE_URLが未設定の場合のみスキップする。
+// DATABASE_URLが設定されているのに接続に失敗した場合(認証ミス・DB停止・
+// マイグレーション未適用等)はt.Fatalfで落とす。ここをt.Skipにすると、CI環境で
+// 接続設定が壊れた際にトランザクション基盤の回帰検知が無言のまま無効化されて
+// しまうため。
 func setupCtx(t *testing.T) context.Context {
 	t.Helper()
 
@@ -32,7 +35,7 @@ func setupCtx(t *testing.T) context.Context {
 
 	db, err := mysql.Connect(ctx)
 	if err != nil {
-		t.Skipf("failed to connect to mysql; skipping: %v", err)
+		t.Fatalf("DATABASE_URL is set but failed to connect to mysql: %v", err)
 	}
 	return Ctx.SetDB(ctx, db)
 }
@@ -57,6 +60,8 @@ func TestTransactionManager_RunInTx(t *testing.T) {
 		if err != nil {
 			t.Fatalf("RunInTx() error = %v", err)
 		}
+		// コミットされ行が残るため、共有DBに残骸を蓄積させないよう明示的に削除する。
+		t.Cleanup(func() { deleteUser(t, ctx, createdID) })
 
 		got, err := userRepo.FindByID(ctx, createdID)
 		if err != nil {
@@ -89,4 +94,17 @@ func TestTransactionManager_RunInTx(t *testing.T) {
 			t.Errorf("error = %v, want ErrRecordNotFound(ロールバックされているはず)", err)
 		}
 	})
+}
+
+// deleteUser はテストで作成したusers行を後始末する。IUserRepositoryにDeleteが
+// 無いため、テスト専用にctxのDBを直接操作する(共有DBに残骸を蓄積させないため)。
+func deleteUser(t *testing.T, ctx context.Context, id string) {
+	t.Helper()
+	if id == "" {
+		return
+	}
+	db := Ctx.GetDBFromCtx(ctx)
+	if err := db.WithContext(ctx).Exec("DELETE FROM users WHERE id = ?", id).Error; err != nil {
+		t.Logf("failed to clean up test user (id=%s): %v", id, err)
+	}
 }
