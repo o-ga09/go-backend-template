@@ -46,9 +46,9 @@ return s.txManager.RunInTx(ctx, func(txCtx context.Context) error {
 
 ## インターフェースと実装の場所
 
-- `ITransactionManager` は `internal/database/transaction/transaction.go` で定義する（DBエンジン非依存の共通実装。`internal/database/mysql/` と並ぶ）
+- `ITransactionManager` は `internal/database/transaction.go` で定義する（`package database`。`logger.go` と同じ階層。DBエンジン非依存の共通実装で、`internal/database/mysql/` と並ぶ）
 - `TransactionManager` はステートレスで、`*gorm.DB` は `ctx` から取得する（フィールドに持たない）
-- モックは `moq` で自動生成し、`internal/database/transaction/mock/` に置く
+- モックは `moq` で自動生成し、`internal/database/mock/` に置く
 - 手書きスタブ禁止
 
 ## コンストラクタでの注入

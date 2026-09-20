@@ -37,13 +37,13 @@ server (handler) → service (usecase) → domain
 
 ```
 [シンプルな CRUD]
-server            → domain, database/mysql, database/transaction （配線と直接呼び出し）
-database/mysql    → domain   (ドメイン型を使うが、ドメインロジックを持たない)
+server            → domain, database, database/mysql （配線と直接呼び出し）
+database/mysql    → domain, database   (ドメイン型・ITransactionManagerを使うが、ドメインロジックを持たない)
 
 [複雑なオーケストレーション]
 server            → service
 service           → domain
-service           → database/transaction, crypto, external/<name>
+service           → database, crypto, external/<name>
 external/<name>   → domain  (入出力にドメイン型を使う。外部SDKの型を漏らさない)
 crypto            → 依存なし  (暗号化/復号のみ。ドメインを知らない)
 ```

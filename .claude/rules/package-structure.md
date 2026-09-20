@@ -28,8 +28,9 @@ backend/
 │   ├── router/            # ルーティング定義
 │   ├── server/            # サーバー起動・ミドルウェア
 │   ├── database/
-│   │   ├── mysql/         # GORM リポジトリ（1ファイル=1ドメイン）+ BaseModel自動挿入・楽観ロックの GORM プラグイン
-│   │   └── transaction/   # ITransactionManager（DBエンジン非依存）
+│   │   ├── logger.go      # GORM用ロガー
+│   │   ├── transaction.go # ITransactionManager（DBエンジン非依存の共通実装）
+│   │   └── mysql/         # GORM リポジトリ（1ファイル=1ドメイン）+ BaseModel自動挿入・楽観ロックの GORM プラグイン
 │   ├── external/<name>/   # 外部サービスクライアントのラッパー（決済・通知など。必要になったら追加）
 │   ├── service/           # usecase層（複雑なオーケストレーションが必要な場合のみ。architecture.md参照）
 │   └── crypto/            # 暗号化/復号（KMS等。必要になったら追加）
