@@ -67,6 +67,25 @@ This is a template repository for implementing web applications using Go and Nex
    docker compose down
    ```
 
+### Database migrations
+
+Schema is managed by SQL files under `backend/db/migrations/` and applied with `cmd/migrate` (a thin wrapper around [`sql-migrate`](https://github.com/rubenv/sql-migrate)). GORM's `AutoMigrate` is not used.
+
+```bash
+cd backend
+export DATABASE_URL="user:P@ssw0rd@tcp(localhost:3306)/test?parseTime=true"
+
+go run cmd/migrate/main.go -command up                       # apply all pending migrations
+go run cmd/migrate/main.go -command down                     # roll back
+go run cmd/migrate/main.go -command status                   # show applied migrations
+go run cmd/migrate/main.go -command new -name <migration_name> # scaffold a new migration file
+go run cmd/migrate/main.go -command seed                     # load sample data from db/seed/*.sql
+```
+
+- New migrations go in `backend/db/migrations/<timestamp>_<name>.sql` with `-- +migrate Up` / `-- +migrate Down` sections.
+- Development seed data lives in `backend/db/seed/*.sql`.
+- `backend/db/sql/` is mounted as MySQL's `docker-entrypoint-initdb.d` in `compose.yml`; it is intentionally empty (schema comes from `cmd/migrate`, not container init scripts).
+
 ### Configuration
 
 - Local backend dev credentials/ports are defined directly in `backend/compose.yml`. For non-Docker or deployed environments, set `ENV`, `PORT`, `DATABASE_URL`, `PROJECTID` (see `pkg/config/config.go`).
