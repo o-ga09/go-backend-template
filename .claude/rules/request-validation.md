@@ -30,28 +30,61 @@ type CreateUserRequest struct {
 ```
 
 ```go
-// ハンドラ側
+// ハンドラ側(internal/handler/user.go)
 var req request.GetUserRequest
 if err := c.Bind(&req); err != nil {
-    return errors.MakeBusinessError(ctx, "invalid request")
+    return errors.Wrap(ctx, err)
 }
 ```
 
-このプロジェクトが使う echo v5（`github.com/labstack/echo/v5`）の `DefaultBinder`（`engine.Binder` のデフォルト。明示的に差し替える必要はない）は `param`/`query`/`header` タグと、Content-Type に応じたボディ（`json` タグ等）を標準でバインドする。`Context` は v4 以前と異なり **interface ではなく struct** で、ハンドラ・ミドルウェアのシグネチャは `func(c *echo.Context) error` になる(`c echo.Context` ではなく `*echo.Context`)。
+このプロジェクトが使う echo v5（`github.com/labstack/echo/v5`）の `Context` は v4 以前と異なり **interface ではなく struct** で、ハンドラ・ミドルウェアのシグネチャは `func(c *echo.Context) error` になる(`c echo.Context` ではなく `*echo.Context`)。`engine.Binder` は `param`/`query`/`header`/`json` タグを標準でバインドする `echo.DefaultBinder` をラップした `pkg/validator.NewBinder()` を登録している（`internal/server/server.go`。次節参照）。
 
 ## バリデーション 🔴
 
 - 構造体の形式的なバリデーション（必須・フォーマット等）は **`go-playground/validator/v10`** の `validate:"..."` タグで宣言する
-- `c.Bind(&req)` の直後に **`c.Validate(&req)`** を呼ぶ。`engine.Validator` には `pkg/validator.New()` を登録している（`internal/server/server.go`）。ハンドラ・テストのどちらで `echo.New()` する場合も、`e.Validator = validator.New()` を設定すること
-- バリデーションエラーは `errors.MakeBusinessError(ctx, err.Error())`（422）に変換する。`pkg/validator` はエラーメッセージ自体を組み立てて返すため、`err.Error()` をそのまま渡す（静的な固定文言で上書きしない）
+- `c.Bind(&req)` の直後に **`c.Validate(&req)`** を呼ぶ。`engine.Validator` には `pkg/validator.New()` を登録している（`internal/server/server.go`）。ハンドラ・テストのどちらで `echo.New()` する場合も、`e.Validator = validator.New()` と `e.Binder = validator.NewBinder()` を設定すること
+
+### `c.Bind` / `c.Validate` の失敗は `errors.Wrap(ctx, err)` するだけでよい 🔴
+
+- **ハンドラ内で `c.Bind` / `c.Validate` の失敗を `errors.MakeBusinessError` に変換しない。** どちらも `errors.Wrap(ctx, err)` を呼ぶだけで自動的に 422 がレスポンスされる
+- これは `pkg/validator` 側（`c.Validate` に登録する `Validator.Validate` と `c.Bind` に登録する `Binder.Bind`）が、失敗時に `errors.WithInvalidArgumentCode(err)` で **その場で 422 のエラーコードだけを事前に付与しておく**ことで成立する。`echo.Validator`/`echo.Binder` インターフェースのメソッドには `ctx` が渡らないため `errors.MakeBusinessError`（ログ出力にRequestIDが要る）は呼べないが、コードだけなら `ctx` 無しで付与できる
+- コード付与済みの `err` は `ErrTypeBussiness` ではラップされていないため `errors.IsWrapped(err)` は `false` のまま。ハンドラが呼ぶ `errors.Wrap(ctx, err)` が実際にラップ・ログ出力を行い、その際 `ergo.CodeOf` が Unwrap チェーンをたどって既に付与済みの 422 コードを見つける（`error-handling.md`「エラーコードの付与」）
+- 新しいバリデーション系のカスタムエラー（`c.Bind`/`c.Validate` 由来）を追加する場合も、この形（`pkg/validator` 側で `errors.WithInvalidArgumentCode` を付与し、ハンドラは `errors.Wrap` するだけ）に従う。ハンドラ側にバインド/バリデーション専用のラッパー関数を新設しない
 
 ```go
+// pkg/validator/validator.go: echo.Validatorインターフェースの実装
+func (v *Validator) Validate(i any) error {
+    err := v.validate.Struct(i)
+    if err == nil {
+        return nil
+    }
+    verrs, ok := err.(val.ValidationErrors)
+    if !ok {
+        return err
+    }
+    return errors.WithInvalidArgumentCode(translate(i, verrs))
+}
+
+// pkg/validator/binder.go: echo.Binderインターフェースの実装。
+// echo.DefaultBinderに委譲し、失敗した場合のみコードを付与する
+func (b *Binder) Bind(c *echo.Context, target any) error {
+    if err := b.delegate.Bind(c, target); err != nil {
+        return errors.WithInvalidArgumentCode(err)
+    }
+    return nil
+}
+```
+
+```go
+// ハンドラ側(internal/handler/user.go)。誤ってここでMakeBusinessErrorを
+// 呼ばない。c.Bind/c.Validateが返した時点で既に422確定のエラーなので、
+// Wrapするだけで自動的に422がレスポンスされる
 var req request.CreateUserRequest
 if err := c.Bind(&req); err != nil {
-    return errors.MakeBusinessError(ctx, "invalid request body")
+    return errors.Wrap(ctx, err)
 }
 if err := c.Validate(&req); err != nil {
-    return errors.MakeBusinessError(ctx, err.Error())
+    return errors.Wrap(ctx, err)
 }
 ```
 

@@ -39,11 +39,14 @@ func TestFoo(t *testing.T) {
 | `RequestIDKey` | `string` | `context.GetRequestID` / `SetRequestID` | `AddID` ミドルウェア |
 | `RequestTimeKey` | `time.Time` | `context.GetRequestTime` / `SetRequestTime` | `AddTime` ミドルウェア |
 | `DBKey` | `*gorm.DB` | `context.GetDBFromCtx` / `SetDB` | `SetDB` ミドルウェア |
+| `UserIDKey` | `string` | `context.GetUserID` / `SetUserID` | `Authenticate` ミドルウェア（セッションCookieが有効な場合のみ。`architecture.md`「認可（所有者ベース）のパターン」） |
 
 **新しい値を context に格納したい場合は `pkg/context/` に追加する。**
 関数の引数で渡せるものは context に入れない。
 
 認証（ログインユーザーの識別子など）を実装する際も、識別子そのものは context 値として `pkg/context/` に追加してよいが、**それを権限判定の根拠として直接使う場合は認可ミドルウェア／ドメイン層で明示的に検証する。** context に入っていることを「認証済みである証明」として扱わない。
+
+現在の実装例（`UserIDKey`）: `Authenticate` ミドルウェアはセッションCookieが無い/不正でもリクエストを拒否せずそのまま次へ進める（`context.GetUserID(ctx)` が空文字になるだけ）。**ログインを必須にするかどうかの判定は必ずハンドラ側で `GetUserID(ctx) == ""` を見て行う。** ミドルウェアが「認証済み」を保証しているわけではない。
 
 ## Context に入れてはいけないもの 🚫
 

@@ -22,10 +22,11 @@ backend/
 │   │   ├── entity.go      # 型定義・インターフェース・go:generate コメント
 │   │   ├── <name>.go      # ドメインメソッド
 │   │   └── mock/          # moq 自動生成モック
-│   ├── handler/           # Echo ハンドラ（1ファイル=1リソース）
+│   ├── handler/           # Echo ハンドラ（1ファイル=1リソース）。IXxxHandlerを返す
 │   │   ├── request/       # リクエスト型
-│   │   └── response/      # レスポンス型
-│   ├── router/            # ルーティング定義
+│   │   ├── response/      # レスポンス型
+│   │   └── cookie.go      # setSessionCookie等、複数ハンドラで共有するヘルパー
+│   ├── router/            # ルーティング定義。route.goがハンドラの依存組み立てを一元管理
 │   ├── server/            # サーバー起動・ミドルウェア
 │   ├── database/
 │   │   ├── logger.go      # GORM用ロガー
@@ -42,6 +43,9 @@ backend/
     ├── constant/          # 定数
     ├── uuid/              # ID生成
     ├── model/             # domain 共通の埋め込み構造体（BaseModel。新規ドメイン追加時に作成。architecture.md参照）
+    ├── session/           # セッションCookieの発行・検証（Manager）。認証系ドメイン共通で使う
+    ├── authz/             # 所有者ベース認可の判定（IsOwner）。ドメイン間で共通化する（architecture.md「認可（所有者ベース）のパターン」）
+    ├── validator/         # echo.Validator/echo.Binderの実装（go-playground/validator/v10 + jaタグ。失敗時に422コードを事前付与する。request-validation.md）
     └── ...                # その他ユーティリティ
 ```
 
@@ -51,7 +55,7 @@ backend/
 ## ファイル分割の基準
 
 - 1 ファイルが 300 行を超えたら分割を検討する
-- handler は **1 リソース = 1 ファイル**（`auth.go`, `order.go` など）
+- handler は **1 リソース = 1 ファイル**（`auth.go`, `order.go` など）。複数リソースのハンドラで共有する非公開ヘルパー（Cookie発行等）は `cookie.go` のような役割名のファイルに切り出してよい（`utils.go`/`common.go` のような曖昧な名前にはしない）
 - mysql リポジトリは **1 ドメイン = 1 ファイル**
 
 ## 新しいパッケージを作るとき
@@ -86,3 +90,5 @@ type IOrderRepository interface {
 ```
 
 **外部サービスクライアントも必ずインターフェース越しに使う。** テストで実APIを叩かないため（`testing.md`）。
+
+**ハンドラも同じ形で公開する。** `internal/handler/<name>.go` で非公開の構造体（`xxxHandler`）を実装し、公開インターフェース（`IXxxHandler`）を定義して `NewXxxHandler` はそれを返す。`internal/router/` はこのインターフェース越しにハンドラを保持する（`architecture.md`「ハンドラも interface 越しに公開する」）。
