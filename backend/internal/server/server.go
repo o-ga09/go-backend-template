@@ -12,17 +12,12 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 
-	"github.com/o-ga09/go-backend-template/internal/database/mysql"
-	"github.com/o-ga09/go-backend-template/internal/handler"
 	"github.com/o-ga09/go-backend-template/internal/router"
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
 	"github.com/o-ga09/go-backend-template/pkg/logger"
 	"github.com/o-ga09/go-backend-template/pkg/session"
 	"github.com/o-ga09/go-backend-template/pkg/validator"
 )
-
-// sessionTTL はバックエンド発行セッションCookieの有効期間(backend/docs/auth.md参照)。
-const sessionTTL = 7 * 24 * time.Hour
 
 // bodyLimitBytes はリクエストボディの上限(10MiB)。echo v5のmiddleware.BodyLimitは
 // バイト数(int64)を直接取る(v3/v4の"10M"のような文字列指定は廃止された)。
@@ -31,29 +26,24 @@ const bodyLimitBytes = 10 << 20
 type Server struct {
 	Port   string
 	engine *echo.Echo
+	route  router.IRouting
 }
 
 func New(ctx context.Context) *Server {
 	cfg := Ctx.GetCfgFromCtx(ctx)
 	engine := echo.New()
-	// engine.Binderはデフォルト(echo.DefaultBinder)のままでよい。echo v5の
-	// DefaultBinderはparam(パスパラメータ)/query(クエリパラメータ)/json(リクエストボディ)
-	// タグを標準でバインドする(request-validation.md参照)。
 	engine.Validator = validator.New()
+	rootAPI := engine.Group("/api")
 	return &Server{
 		Port:   cfg.Port,
 		engine: engine,
+		route:  router.New(rootAPI, *cfg),
 	}
 }
 
 func (s *Server) Run(ctx context.Context) error {
 	cfg := Ctx.GetCfgFromCtx(ctx)
-	sessionMgr := session.NewManager(cfg.SessionSecret, sessionTTL)
-
-	// 依存の組み立て(コンストラクタで注入。architecture.md「依存注入のルール」)
-	userRepo := mysql.NewUserRepository()
-	userHandler := handler.NewUserHandler(userRepo, sessionMgr)
-	authHandler := handler.NewAuthHandler(userRepo)
+	sessionMgr := session.NewManager(cfg.SessionSecret, session.SessionTTL)
 
 	// ミドルウェアの設定
 	s.engine.Use(middleware.Recover())
@@ -69,9 +59,9 @@ func (s *Server) Run(ctx context.Context) error {
 	s.engine.Use(ErrorHandler())
 
 	// ルーティングの設定
-	apiRoot := s.engine.Group("/api")
-	router.SetupApplicationRoute(apiRoot, userHandler, authHandler)
-	router.SetupSystemRoute(apiRoot)
+	s.route.SetupApplicationRoute()
+	s.route.SetupSystemRoute()
+
 	// サーバーの起動
 	port := fmt.Sprintf(":%s", s.Port)
 	srv := &http.Server{

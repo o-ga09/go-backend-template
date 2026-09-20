@@ -16,20 +16,25 @@ import (
 // UserHandler はユーザーリソース(/api/users)に関するエンドポイントを扱う。
 // シンプルなCRUDのためusecase層を挟まず、domainのリポジトリを直接呼び出す
 // (architecture.md「基本方針：レイヤードアーキテクチャ」)。
-type UserHandler struct {
+type userHandler struct {
 	repo       user.IUserRepository
 	sessionMgr *session.Manager
 }
 
+type IUserHandler interface {
+	GetByID(c *echo.Context) error
+	Create(c *echo.Context) error
+}
+
 // NewUserHandler はUserHandlerを生成する。
-func NewUserHandler(repo user.IUserRepository, sessionMgr *session.Manager) *UserHandler {
-	return &UserHandler{repo: repo, sessionMgr: sessionMgr}
+func NewUserHandler(repo user.IUserRepository, sessionMgr *session.Manager) IUserHandler {
+	return &userHandler{repo: repo, sessionMgr: sessionMgr}
 }
 
 // Create は初回ログイン時のユーザー作成(または既存ユーザーの特定)を行い、
 // セッションCookieを発行する。
 // POST /api/users
-func (h *UserHandler) Create(c *echo.Context) error {
+func (h *userHandler) Create(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	var req request.CreateUserRequest
@@ -80,7 +85,7 @@ func (h *UserHandler) Create(c *echo.Context) error {
 // 本人以外のリソースへのアクセスは403で拒否する(認可はdomain.User.IsOwnedByに
 // 委譲。architecture.md「ドメイン層のルール」)。
 // GET /api/users/:id
-func (h *UserHandler) GetByID(c *echo.Context) error {
+func (h *userHandler) GetByID(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	requesterID := Ctx.GetUserID(ctx)

@@ -5,8 +5,8 @@ import (
 	Ctx "github.com/o-ga09/go-backend-template/pkg/context"
 )
 
-func SetupSystemRoute(root *echo.Group) {
-	system := root.Group("/system")
+func (r *route) SetupSystemRoute() {
+	system := r.rooAPI.Group("/system")
 
 	// ヘルスチェック
 	system.GET("/health", func(c *echo.Context) error {

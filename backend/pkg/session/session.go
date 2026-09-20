@@ -21,6 +21,9 @@ import (
 	"github.com/o-ga09/go-backend-template/pkg/errors"
 )
 
+// sessionTTL はバックエンド発行セッションCookieの有効期間(backend/docs/auth.md参照)。
+const SessionTTL = 7 * 24 * time.Hour
+
 // CookieName はセッションCookieの名前。
 const CookieName = "session_token"
 
