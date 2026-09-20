@@ -11,7 +11,7 @@ import (
 
 //go:generate go run github.com/matryer/moq@latest -out mock/cart_repository_mock.go -pkg moq . ICartRepository
 
-// Cart はカードメインエンティティ。domain＝DBモデルの方針に従い、
+// Cart はカートドメインエンティティ。domain＝DBモデルの方針に従い、
 // GORMモデルを兼ねる(internal/database/mysql.cartRepository経由で永続化される)。
 // 1ユーザー1カート(carts.user_idにUNIQUE制約)。
 type Cart struct {
@@ -38,7 +38,7 @@ func (CartItem) TableName() string {
 	return "cart_items"
 }
 
-// ICartRepository はカードメインの永続化用インターフェース。
+// ICartRepository はカートドメインの永続化用インターフェース。
 // 実装はinternal/database/mysql.cartRepository(GORM)。
 type ICartRepository interface {
 	// FindByUserID はユーザーIDでカート(明細含む)を検索する。

@@ -13,11 +13,13 @@ func (c *Cart) IsOwnedBy(requesterID string) bool {
 
 // CanCheckout はカートが注文確定可能な状態かどうかを判定する
 // (バリデーションはドメイン層の純粋関数として実装する。architecture.md参照)。
-// アイテムが空の場合は注文できない。呼び出し元(Task 4のハンドラ/service)は
-// このエラーをerrors.MakeBusinessErrorに変換する。
+// アイテムが空の場合はerrors.ErrCartEmpty(sentinel)を返す。errors.New(...)で
+// 毎回新規エラーを生成すると呼び出し元がerrors.Isで判別できないため、
+// sentinelを返す。呼び出し元(Task 4のハンドラ/service)はこのエラーを
+// errors.MakeBusinessErrorに変換する。
 func (c *Cart) CanCheckout() error {
 	if len(c.Items) == 0 {
-		return errors.New("cart has no items")
+		return errors.ErrCartEmpty
 	}
 	return nil
 }

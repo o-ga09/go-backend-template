@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/o-ga09/go-backend-template/internal/database"
+	txmock "github.com/o-ga09/go-backend-template/internal/database/mock"
 	"github.com/o-ga09/go-backend-template/internal/domain/cart"
 	cartmoq "github.com/o-ga09/go-backend-template/internal/domain/cart/mock"
 	"github.com/o-ga09/go-backend-template/internal/domain/product"
@@ -15,6 +17,16 @@ import (
 	"github.com/o-ga09/go-backend-template/internal/server"
 	"github.com/o-ga09/go-backend-template/pkg/errors"
 )
+
+// newNoopTxManager はtransaction.md「テストでのモック利用」に従い、
+// fnをそのまま呼ぶだけ(トランザクションなし)のITransactionManagerモックを返す。
+func newNoopTxManager() database.ITransactionManager {
+	return &txmock.ITransactionManagerMock{
+		RunInTxFunc: func(ctx context.Context, fn func(ctx context.Context) error) error {
+			return fn(ctx)
+		},
+	}
+}
 
 func TestCartHandler_Get(t *testing.T) {
 	tests := []struct {
@@ -56,7 +68,7 @@ func TestCartHandler_Get(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			c, rec := newTestContext(t, http.MethodGet, "/api/cart", "", tc.requesterID)
-			h := handler.NewCartHandler(tc.cartRepo, &productmoq.IProductRepositoryMock{})
+			h := handler.NewCartHandler(tc.cartRepo, &productmoq.IProductRepositoryMock{}, newNoopTxManager())
 
 			err := h.Get(c)
 
@@ -77,10 +89,8 @@ func TestCartHandler_Get(t *testing.T) {
 func TestCartHandler_Get_リクエスト主体の識別子で自分のカートのみ取得する(t *testing.T) {
 	// カートIDをリクエストから受け取らない設計のため、requesterID以外のカートを
 	// 直接指定して取得することはできない(global-constraints.md/task-3-brief.md)。
-	var gotUserID string
 	cartRepo := &cartmoq.ICartRepositoryMock{
 		FindByUserIDFunc: func(ctx context.Context, userID string) (*cart.Cart, error) {
-			gotUserID = userID
 			c := &cart.Cart{UserID: userID}
 			c.ID = "cart-1"
 			return c, nil
@@ -88,13 +98,15 @@ func TestCartHandler_Get_リクエスト主体の識別子で自分のカート�
 	}
 
 	c, _ := newTestContext(t, http.MethodGet, "/api/cart", "", "user-1")
-	h := handler.NewCartHandler(cartRepo, &productmoq.IProductRepositoryMock{})
+	h := handler.NewCartHandler(cartRepo, &productmoq.IProductRepositoryMock{}, newNoopTxManager())
 
 	if err := h.Get(c); err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
-	if gotUserID != "user-1" {
-		t.Errorf("FindByUserID was called with userID = %q, want %q", gotUserID, "user-1")
+
+	calls := cartRepo.FindByUserIDCalls()
+	if len(calls) != 1 || calls[0].UserID != "user-1" {
+		t.Fatalf("FindByUserID calls = %+v, want single call with userID=user-1", calls)
 	}
 }
 
@@ -193,7 +205,32 @@ func TestCartHandler_AddItem(t *testing.T) {
 					return p, nil
 				},
 			},
-			cartRepo:   &cartmoq.ICartRepositoryMock{},
+			cartRepo: &cartmoq.ICartRepositoryMock{
+				FindByUserIDFunc: func(ctx context.Context, userID string) (*cart.Cart, error) {
+					return nil, errors.ErrRecordNotFound
+				},
+			},
+			wantStatus: http.StatusUnprocessableEntity,
+		},
+		{
+			// I-1: カート内に既に同じ商品がある場合、加算後の数量で在庫を判定する。
+			name:        "カート内の既存数量と合わせて在庫を超える場合は422",
+			requesterID: "user-1",
+			body:        `{"productId":"p1","quantity":5}`,
+			productRepo: &productmoq.IProductRepositoryMock{
+				FindByIDFunc: func(ctx context.Context, id string) (*product.Product, error) {
+					p := &product.Product{Stock: 10}
+					p.ID = id
+					return p, nil
+				},
+			},
+			cartRepo: &cartmoq.ICartRepositoryMock{
+				FindByUserIDFunc: func(ctx context.Context, userID string) (*cart.Cart, error) {
+					c := &cart.Cart{UserID: userID, Items: []cart.CartItem{{ProductID: "p1", Quantity: 8}}}
+					c.ID = "cart-1"
+					return c, nil
+				},
+			},
 			wantStatus: http.StatusUnprocessableEntity,
 		},
 		{
@@ -217,7 +254,7 @@ func TestCartHandler_AddItem(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			c, rec := newTestContext(t, http.MethodPost, "/api/cart", tc.body, tc.requesterID)
-			h := handler.NewCartHandler(tc.cartRepo, tc.productRepo)
+			h := handler.NewCartHandler(tc.cartRepo, tc.productRepo, newNoopTxManager())
 
 			err := h.AddItem(c)
 
@@ -235,18 +272,65 @@ func TestCartHandler_AddItem(t *testing.T) {
 	}
 }
 
+// I-5: 自分のカート以外を操作できないことの回帰テスト。カートIDをリクエストから
+// 受け取らない設計のため、AddItem/Createに渡るカートIDが常にrequesterID自身の
+// カート(FindByUserIDが返したID)であることをモックの呼び出し履歴で検証する。
+func TestCartHandler_AddItem_常に自分のカートIDに対して操作する(t *testing.T) {
+	productRepo := &productmoq.IProductRepositoryMock{
+		FindByIDFunc: func(ctx context.Context, id string) (*product.Product, error) {
+			p := &product.Product{Stock: 10}
+			p.ID = id
+			return p, nil
+		},
+	}
+	cartRepo := &cartmoq.ICartRepositoryMock{
+		FindByUserIDFunc: func(ctx context.Context, userID string) (*cart.Cart, error) {
+			c := &cart.Cart{UserID: userID}
+			c.ID = "cart-of-user-1"
+			return c, nil
+		},
+		AddItemFunc: func(ctx context.Context, cartID, productID string, quantity int) error {
+			return nil
+		},
+	}
+
+	c, _ := newTestContext(t, http.MethodPost, "/api/cart", `{"productId":"p1","quantity":1}`, "user-1")
+	h := handler.NewCartHandler(cartRepo, productRepo, newNoopTxManager())
+
+	if err := h.AddItem(c); err != nil {
+		t.Fatalf("AddItem() error = %v", err)
+	}
+
+	findCalls := cartRepo.FindByUserIDCalls()
+	if len(findCalls) == 0 || findCalls[0].UserID != "user-1" {
+		t.Fatalf("FindByUserID calls = %+v, want first call with userID=user-1", findCalls)
+	}
+	addCalls := cartRepo.AddItemCalls()
+	if len(addCalls) != 1 || addCalls[0].CartID != "cart-of-user-1" {
+		t.Fatalf("AddItem calls = %+v, want single call with cartID=cart-of-user-1", addCalls)
+	}
+}
+
 func TestCartHandler_UpdateItem(t *testing.T) {
 	tests := []struct {
 		name        string
 		requesterID string
 		body        string
 		cartRepo    *cartmoq.ICartRepositoryMock
+		productRepo *productmoq.IProductRepositoryMock
 		wantStatus  int
 	}{
 		{
 			name:        "数量を変更できる",
 			requesterID: "user-1",
 			body:        `{"productId":"p1","quantity":5}`,
+			productRepo: &productmoq.IProductRepositoryMock{
+				FindByIDFunc: func(ctx context.Context, id string) (*product.Product, error) {
+					p := &product.Product{Stock: 10}
+					p.ID = id
+					return p, nil
+				},
+			},
 			cartRepo: &cartmoq.ICartRepositoryMock{
 				FindByUserIDFunc: func(ctx context.Context, userID string) (*cart.Cart, error) {
 					c := &cart.Cart{UserID: userID}
@@ -260,9 +344,43 @@ func TestCartHandler_UpdateItem(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
+			name:        "存在しない商品は404",
+			requesterID: "user-1",
+			body:        `{"productId":"p-404","quantity":5}`,
+			productRepo: &productmoq.IProductRepositoryMock{
+				FindByIDFunc: func(ctx context.Context, id string) (*product.Product, error) {
+					return nil, errors.ErrRecordNotFound
+				},
+			},
+			cartRepo:   &cartmoq.ICartRepositoryMock{},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			// I-1: UpdateItemにも在庫チェックを追加する。
+			name:        "在庫不足の場合は422",
+			requesterID: "user-1",
+			body:        `{"productId":"p1","quantity":5}`,
+			productRepo: &productmoq.IProductRepositoryMock{
+				FindByIDFunc: func(ctx context.Context, id string) (*product.Product, error) {
+					p := &product.Product{Stock: 1}
+					p.ID = id
+					return p, nil
+				},
+			},
+			cartRepo:   &cartmoq.ICartRepositoryMock{},
+			wantStatus: http.StatusUnprocessableEntity,
+		},
+		{
 			name:        "カートが無い場合は404",
 			requesterID: "user-1",
 			body:        `{"productId":"p1","quantity":5}`,
+			productRepo: &productmoq.IProductRepositoryMock{
+				FindByIDFunc: func(ctx context.Context, id string) (*product.Product, error) {
+					p := &product.Product{Stock: 10}
+					p.ID = id
+					return p, nil
+				},
+			},
 			cartRepo: &cartmoq.ICartRepositoryMock{
 				FindByUserIDFunc: func(ctx context.Context, userID string) (*cart.Cart, error) {
 					return nil, errors.ErrRecordNotFound
@@ -274,6 +392,13 @@ func TestCartHandler_UpdateItem(t *testing.T) {
 			name:        "対象の明細が無い場合は404",
 			requesterID: "user-1",
 			body:        `{"productId":"p1","quantity":5}`,
+			productRepo: &productmoq.IProductRepositoryMock{
+				FindByIDFunc: func(ctx context.Context, id string) (*product.Product, error) {
+					p := &product.Product{Stock: 10}
+					p.ID = id
+					return p, nil
+				},
+			},
 			cartRepo: &cartmoq.ICartRepositoryMock{
 				FindByUserIDFunc: func(ctx context.Context, userID string) (*cart.Cart, error) {
 					c := &cart.Cart{UserID: userID}
@@ -290,6 +415,7 @@ func TestCartHandler_UpdateItem(t *testing.T) {
 			name:        "未認証の場合は401",
 			requesterID: "",
 			body:        `{"productId":"p1","quantity":5}`,
+			productRepo: &productmoq.IProductRepositoryMock{},
 			cartRepo:    &cartmoq.ICartRepositoryMock{},
 			wantStatus:  http.StatusUnauthorized,
 		},
@@ -298,7 +424,7 @@ func TestCartHandler_UpdateItem(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			c, rec := newTestContext(t, http.MethodPut, "/api/cart", tc.body, tc.requesterID)
-			h := handler.NewCartHandler(tc.cartRepo, &productmoq.IProductRepositoryMock{})
+			h := handler.NewCartHandler(tc.cartRepo, tc.productRepo, newNoopTxManager())
 
 			err := h.UpdateItem(c)
 
@@ -313,6 +439,39 @@ func TestCartHandler_UpdateItem(t *testing.T) {
 				t.Errorf("status = %d, want %d", rec.Code, tc.wantStatus)
 			}
 		})
+	}
+}
+
+// I-5: UpdateItemが常に自分のカートID(FindByUserIDが返したID)に対して操作すること。
+func TestCartHandler_UpdateItem_常に自分のカートIDに対して操作する(t *testing.T) {
+	productRepo := &productmoq.IProductRepositoryMock{
+		FindByIDFunc: func(ctx context.Context, id string) (*product.Product, error) {
+			p := &product.Product{Stock: 10}
+			p.ID = id
+			return p, nil
+		},
+	}
+	cartRepo := &cartmoq.ICartRepositoryMock{
+		FindByUserIDFunc: func(ctx context.Context, userID string) (*cart.Cart, error) {
+			c := &cart.Cart{UserID: userID}
+			c.ID = "cart-of-user-1"
+			return c, nil
+		},
+		UpdateItemQuantityFunc: func(ctx context.Context, cartID, productID string, quantity int) error {
+			return nil
+		},
+	}
+
+	c, _ := newTestContext(t, http.MethodPut, "/api/cart", `{"productId":"p1","quantity":3}`, "user-1")
+	h := handler.NewCartHandler(cartRepo, productRepo, newNoopTxManager())
+
+	if err := h.UpdateItem(c); err != nil {
+		t.Fatalf("UpdateItem() error = %v", err)
+	}
+
+	updateCalls := cartRepo.UpdateItemQuantityCalls()
+	if len(updateCalls) != 1 || updateCalls[0].CartID != "cart-of-user-1" {
+		t.Fatalf("UpdateItemQuantity calls = %+v, want single call with cartID=cart-of-user-1", updateCalls)
 	}
 }
 
@@ -352,6 +511,23 @@ func TestCartHandler_RemoveItem(t *testing.T) {
 			wantStatus: http.StatusNotFound,
 		},
 		{
+			// I-5: 対象の明細が無い場合の404分岐が未テストだったため追加。
+			name:        "対象の明細が無い場合は404",
+			requesterID: "user-1",
+			query:       "productId=p1",
+			cartRepo: &cartmoq.ICartRepositoryMock{
+				FindByUserIDFunc: func(ctx context.Context, userID string) (*cart.Cart, error) {
+					c := &cart.Cart{UserID: userID}
+					c.ID = "cart-1"
+					return c, nil
+				},
+				RemoveItemFunc: func(ctx context.Context, cartID, productID string) error {
+					return errors.ErrRecordNotFound
+				},
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
 			name:        "未認証の場合は401",
 			requesterID: "",
 			query:       "productId=p1",
@@ -363,7 +539,7 @@ func TestCartHandler_RemoveItem(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			c, rec := newTestContext(t, http.MethodDelete, "/api/cart?"+tc.query, "", tc.requesterID)
-			h := handler.NewCartHandler(tc.cartRepo, &productmoq.IProductRepositoryMock{})
+			h := handler.NewCartHandler(tc.cartRepo, &productmoq.IProductRepositoryMock{}, newNoopTxManager())
 
 			err := h.RemoveItem(c)
 
@@ -381,6 +557,32 @@ func TestCartHandler_RemoveItem(t *testing.T) {
 	}
 }
 
+// I-5: RemoveItemが常に自分のカートID(FindByUserIDが返したID)に対して操作すること。
+func TestCartHandler_RemoveItem_常に自分のカートIDに対して操作する(t *testing.T) {
+	cartRepo := &cartmoq.ICartRepositoryMock{
+		FindByUserIDFunc: func(ctx context.Context, userID string) (*cart.Cart, error) {
+			c := &cart.Cart{UserID: userID}
+			c.ID = "cart-of-user-1"
+			return c, nil
+		},
+		RemoveItemFunc: func(ctx context.Context, cartID, productID string) error {
+			return nil
+		},
+	}
+
+	c, _ := newTestContext(t, http.MethodDelete, "/api/cart?productId=p1", "", "user-1")
+	h := handler.NewCartHandler(cartRepo, &productmoq.IProductRepositoryMock{}, newNoopTxManager())
+
+	if err := h.RemoveItem(c); err != nil {
+		t.Fatalf("RemoveItem() error = %v", err)
+	}
+
+	removeCalls := cartRepo.RemoveItemCalls()
+	if len(removeCalls) != 1 || removeCalls[0].CartID != "cart-of-user-1" {
+		t.Fatalf("RemoveItem calls = %+v, want single call with cartID=cart-of-user-1", removeCalls)
+	}
+}
+
 // レスポンスの中身も一件だけ確認しておく(response.FromCartの変換確認)。
 func TestCartHandler_Get_ResponseBody(t *testing.T) {
 	cartRepo := &cartmoq.ICartRepositoryMock{
@@ -391,7 +593,7 @@ func TestCartHandler_Get_ResponseBody(t *testing.T) {
 		},
 	}
 	c, rec := newTestContext(t, http.MethodGet, "/api/cart", "", "user-1")
-	h := handler.NewCartHandler(cartRepo, &productmoq.IProductRepositoryMock{})
+	h := handler.NewCartHandler(cartRepo, &productmoq.IProductRepositoryMock{}, newNoopTxManager())
 
 	if err := h.Get(c); err != nil {
 		t.Fatalf("Get() error = %v", err)

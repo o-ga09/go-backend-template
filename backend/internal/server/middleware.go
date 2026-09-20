@@ -104,6 +104,8 @@ func CORS(ctx context.Context) echo.MiddlewareFunc {
 		AllowMethods: []string{
 			http.MethodPost,
 			http.MethodGet,
+			http.MethodPut,
+			http.MethodDelete,
 			http.MethodOptions,
 		},
 		AllowHeaders:     []string{"Content-Type"},

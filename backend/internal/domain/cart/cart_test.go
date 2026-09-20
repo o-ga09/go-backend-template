@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/o-ga09/go-backend-template/internal/domain/cart"
+	pkgerrors "github.com/o-ga09/go-backend-template/pkg/errors"
 )
 
 func TestCart_IsOwnedBy(t *testing.T) {
@@ -41,8 +42,8 @@ func TestCart_CanCheckout(t *testing.T) {
 			c := &cart.Cart{Items: tc.items}
 			err := c.CanCheckout()
 			if tc.wantErr {
-				if err == nil {
-					t.Fatal("CanCheckout() error = nil, want error")
+				if !pkgerrors.Is(err, pkgerrors.ErrCartEmpty) {
+					t.Fatalf("CanCheckout() error = %v, want ErrCartEmpty", err)
 				}
 				return
 			}

@@ -45,7 +45,7 @@ func (r *cartRepository) FindByUserID(ctx context.Context, userID string) (*cart
 // findItems はカートIDに紐づく明細を作成日時の昇順で取得する。
 func (r *cartRepository) findItems(ctx context.Context, db *gorm.DB, cartID string) ([]cart.CartItem, error) {
 	var items []cart.CartItem
-	if err := db.WithContext(ctx).Where("cart_id = ?", cartID).Order("created_at ASC").Find(&items).Error; err != nil {
+	if err := db.WithContext(ctx).Where("cart_id = ?", cartID).Order("created_at ASC, id ASC").Find(&items).Error; err != nil {
 		return nil, err
 	}
 	return items, nil

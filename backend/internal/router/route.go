@@ -2,6 +2,7 @@ package router
 
 import (
 	"github.com/labstack/echo/v5"
+	"github.com/o-ga09/go-backend-template/internal/database"
 	"github.com/o-ga09/go-backend-template/internal/database/mysql"
 	"github.com/o-ga09/go-backend-template/internal/handler"
 	"github.com/o-ga09/go-backend-template/pkg/config"
@@ -25,12 +26,13 @@ func New(root *echo.Group, cfg config.Config) IRouting {
 	userRepo := mysql.NewUserRepository()
 	productRepo := mysql.NewProductRepository()
 	cartRepo := mysql.NewCartRepository()
+	txManager := database.NewTransactionManager()
 	sessionMgr := session.NewManager(cfg.SessionSecret, session.SessionTTL)
 	return &route{
 		rooAPI:  root,
 		user:    handler.NewUserHandler(userRepo, sessionMgr),
 		auth:    handler.NewAuthHandler(userRepo),
 		product: handler.NewProductHandler(productRepo),
-		cart:    handler.NewCartHandler(cartRepo, productRepo),
+		cart:    handler.NewCartHandler(cartRepo, productRepo, txManager),
 	}
 }

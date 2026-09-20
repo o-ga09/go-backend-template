@@ -62,6 +62,12 @@ var (
 	ErrInvalidSession = ergo.NewSentinel("invalid session")
 	ErrSessionExpired = ergo.NewSentinel("session expired")
 
+	// カートエラー
+	// ErrCartEmpty はカートに商品が無い状態で注文確定しようとした場合のエラー
+	// (cart.Cart.CanCheckout)。呼び出し元がerrors.Is(err, ErrCartEmpty)で判別できるよう
+	// ergo.NewSentinelで定義する(errors.Newで毎回生成すると呼び出し元が種別判定できない)。
+	ErrCartEmpty = ergo.NewSentinel("cart has no items")
+
 	// 画像エラー
 	ErrInvalidImageType  = ergo.New("ファイルの種類が不正です。")
 	ErrFailedImageName   = ergo.New("ファイル名の生成に失敗しました。")
