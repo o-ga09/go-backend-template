@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { http, HttpResponse } from 'msw'
-import { API_BASE_URL } from '@/tests/mocks/handlers'
-import { server } from '@/tests/mocks/server'
+import { API_BASE_URL } from '@/mocks/handlers'
+import { server } from '@/mocks/server'
 import { fetchProduct, fetchProducts, filterProductsByName } from './api'
 import type { Product } from './types'
 
