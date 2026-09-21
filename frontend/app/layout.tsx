@@ -6,6 +6,7 @@ import NextTopLoader from 'nextjs-toploader'
 import { topLoaderConfig } from '@/lib/loaderConfig'
 import { Toaster } from '@/components/ui/sonner'
 import { SessionProvider } from '@/providers/sessionProvider'
+import { SiteHeader } from '@/components/site-header'
 
 export const viewport = 'width=device-width, initial-scale=1'
 
@@ -21,6 +22,7 @@ export default function RootLayout({
           <AuthProvider>
             <ApiProvider>
               <NextTopLoader {...topLoaderConfig} />
+              <SiteHeader />
               {children}
               <Toaster />
             </ApiProvider>
