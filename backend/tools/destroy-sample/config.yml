@@ -1,0 +1,48 @@
+# サンプルEC実装(#10)を削除して骨組み(スケルトン)だけを残すための設定。
+# `go run ./tools/destroy-sample` から読み込まれる。
+#
+# 新しいサンプル実装を追加/差し替える場合は、コードではなくこのファイルを更新する。
+
+# paths: 削除対象。リポジトリルート相対のパス(ファイル/ディレクトリいずれも可)。
+# `git rm -r --ignore-unmatch` で削除するため、存在しないパスは無視される。
+paths:
+  # EC商材ドメイン(商品・カート・注文)
+  - backend/internal/domain/product
+  - backend/internal/domain/cart
+  - backend/internal/domain/order
+
+  # EC商材向けハンドラ
+  - backend/internal/handler/product.go
+  - backend/internal/handler/product_test.go
+  - backend/internal/handler/cart.go
+  - backend/internal/handler/cart_test.go
+  - backend/internal/handler/order.go
+  - backend/internal/handler/order_test.go
+  - backend/internal/handler/request/product.go
+  - backend/internal/handler/request/cart.go
+  - backend/internal/handler/request/order.go
+  - backend/internal/handler/response/product.go
+  - backend/internal/handler/response/cart.go
+  - backend/internal/handler/response/order.go
+
+  # EC商材向けリポジトリ実装
+  - backend/internal/database/mysql/product.go
+  - backend/internal/database/mysql/product_test.go
+  - backend/internal/database/mysql/cart.go
+  - backend/internal/database/mysql/cart_test.go
+  - backend/internal/database/mysql/order.go
+  - backend/internal/database/mysql/order_test.go
+
+  # EC商材向けマイグレーション・シードデータ
+  - backend/db/migrations/20260920151332_create_products_table.sql
+  - backend/db/migrations/20260920151333_create_carts_table.sql
+  - backend/db/migrations/20260920151334_create_orders_table.sql
+  - backend/db/seed/001_products.sql
+
+# replacements: 削除後にスケルトン版のテンプレートで上書きするファイル。
+# target はリポジトリルート相対、template は本ディレクトリの templates/ 配下の相対パス。
+replacements:
+  - target: backend/internal/router/route.go
+    template: router_route.go.tmpl
+  - target: backend/internal/router/application.go
+    template: router_application.go.tmpl

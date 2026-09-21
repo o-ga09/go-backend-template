@@ -86,6 +86,21 @@ go run cmd/migrate/main.go -command seed                     # load sample data 
 - Development seed data lives in `backend/db/seed/*.sql`.
 - `backend/db/sql/` is mounted as MySQL's `docker-entrypoint-initdb.d` in `compose.yml`; it is intentionally empty (schema comes from `cmd/migrate`, not container init scripts).
 
+### Using this repository as a template
+
+This repository ships with a runnable EC sample (product/cart/order domain, handlers, migrations, seed data) so the layering/error-handling/testing conventions can be seen working end to end. When starting a new project from this template, you typically don't want that sample code — run the "destroy sample" tool to remove it and reset the router to an empty skeleton:
+
+```bash
+# Run against a git-managed, uncommitted clone of this template
+# (deletions go through `git rm`, so they can always be inspected/reverted with git)
+cd backend
+go run ./tools/destroy-sample -dry-run   # preview what would be removed, without changing anything
+go run ./tools/destroy-sample            # prompts for confirmation, then deletes and rewrites the router
+go run ./tools/destroy-sample -yes       # skip the confirmation prompt (non-interactive)
+```
+
+After it runs, review the result with `git status` / `git diff --cached`, then confirm `go build ./...` (backend) and `pnpm build` (frontend) still succeed. What gets removed/kept is declared in `backend/tools/destroy-sample/config.yml`; update that file (not the tool's code) when the sample implementation changes.
+
 ### Configuration
 
 - Local backend dev credentials/ports are defined directly in `backend/compose.yml`. For non-Docker or deployed environments, set `ENV`, `PORT`, `DATABASE_URL`, `PROJECTID` (see `pkg/config/config.go`).
