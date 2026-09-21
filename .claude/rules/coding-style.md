@@ -102,10 +102,42 @@ var c Cart
 db.Preload("Items").Where("user_id = ?", userID).First(&c)
 ```
 
-書き込み側（`Create`）で明細を1件ずつ`Create`している既存の実装
-（`internal/database/mysql/order.go`）は、`BaseModelPlugin`がスライスのreflectに
-未対応であることの回避策であり、これは維持する。GORMの関連付けを有効にすると
-`db.Create(&order)`が明細もバッチINSERTしようとして同じ問題に当たるため、
-親の`Create`では`.Omit(clause.Associations)`を指定し、明細への書き込みは
-既存の1件ずつのループを使う。読み取り（`Preload`）と書き込みのバッチINSERT回避は
-別問題として扱うこと。
+書き込み側も同じアソシエーションに任せてよい。`BaseModelPlugin`
+（`internal/database/mysql/base_model_plugin.go`）はスライドのバッチINSERTにも
+対応しており（`stmt.ReflectValue.Kind()`が`reflect.Slice`の場合は要素ごとに
+ID/Versionを採番する）、`db.Create(o)`だけで`o.Items`もあわせて1回のバッチINSERTで
+書き込まれる。明細を1件ずつループでCreateしない。
+
+## 存在確認と更新を分けない。条件付きUPDATE + RowsAffectedで1回にまとめる 🔴
+
+「対象レコードがあるか`First`で確認してから`Updates`/`Delete`する」という
+2クエリの実装をしない。`WHERE`句に業務キーを指定した1回のUPDATE/DELETEを発行し、
+`RowsAffected == 0`を「対象が無い」の判定に使う（`RemoveItem`が既にこの形）。
+
+```go
+// 誤: 存在確認(SELECT)と更新(UPDATE)で責務(とクエリ)が2つに分かれている
+var item cart.CartItem
+if err := db.Where("cart_id = ? AND product_id = ?", cartID, productID).First(&item).Error; err != nil {
+    return err
+}
+return db.Model(&item).Updates(map[string]interface{}{"quantity": quantity}).Error
+
+// 正: 1回のUPDATEで存在確認と更新を兼ねる
+res := db.Model(&cart.CartItem{}).
+    Where("cart_id = ? AND product_id = ?", cartID, productID).
+    Updates(map[string]interface{}{"quantity": quantity})
+if res.Error != nil {
+    return res.Error
+}
+if res.RowsAffected == 0 {
+    return pkgerrors.ErrRecordNotFound
+}
+return nil
+```
+
+この形は、値が変化しないUPDATE（例: 同じ数量への更新）でも`RowsAffected`が
+「一致した行数」を返す必要がある。`internal/database/mysql/connect.go`は
+DSNに`clientFoundRows=true`を強制しており（`withClientFoundRows`）、MySQLの
+デフォルト挙動（値が変化した行数のみを返す）による誤判定を防いでいる。
+`RowsAffected`で存在確認を行うすべてのコード（本パターン・`DecreaseStock`・
+`BaseModelPlugin`の楽観ロック判定）はこの前提の上に成り立っている。

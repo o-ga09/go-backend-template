@@ -219,13 +219,15 @@ if err := db.Where("id = ?", id).First(&p).Error; err != nil {
 }
 ```
 
-一意制約違反（MySQL固有のエラー番号1062）のような、GORMより下のドライバ層の
-エラーを判定する変換（`isDuplicateEntryErr` → `errors.ErrUniqueConstraint`）は
-引き続きリポジトリ側で行う（ドライバ固有の型を上位レイヤーに漏らさないため。
-`architecture.md`「external/<name>/はSDK型をdomainやserverに漏らさない」と同じ理由）。
-楽観ロック競合（`ErrOptimisticLockConflict`）の判定も同様の理由で
-`internal/database/mysql/base_model_plugin.go`に集約済みで、各リポジトリでは
-判定しない。
+一意制約違反・外部キー制約違反も同様。`internal/database/mysql/connect.go`が
+`gorm.Config{TranslateError: true}`でGORMを開いているため、MySQLドライバの
+`error_translator.go`がエラー番号1062/1451/1452を`gorm.ErrDuplicatedKey`/
+`gorm.ErrForeignKeyViolated`へ自動変換する。`pkg/errors.ErrUniqueConstraint`/
+`ErrForeignKeyConstraint`はこれらのエイリアスのため、**リポジトリ側で
+MySQLエラー番号を手動判定する独自関数（`isDuplicateEntryErr`等）を書かない**。
+GORMが対応していない分類（楽観ロック競合等）だけ、
+`internal/database/mysql/base_model_plugin.go`のようにGORMプラグインへ
+集約する（各リポジトリメソッドに個別実装しない）。
 
 ## handler でのエラー変換
 

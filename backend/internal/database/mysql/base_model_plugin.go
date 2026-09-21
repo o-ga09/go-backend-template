@@ -1,7 +1,10 @@
 package mysql
 
 import (
+	"reflect"
+
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 
 	pkgerrors "github.com/o-ga09/go-backend-template/pkg/errors"
 	"github.com/o-ga09/go-backend-template/pkg/uuid"
@@ -53,21 +56,37 @@ func (p *BaseModelPlugin) Initialize(db *gorm.DB) error {
 	return nil
 }
 
+// バッチINSERT(スライス)の場合、stmt.ReflectValueは[]Xxxそのものになるため、
+// 要素ごとにID/Versionを採番する(GORM本体のcallbacks/create.goと同じ
+// reflect.Indirect(stmt.ReflectValue.Index(i))パターン)。
 func beforeCreate(db *gorm.DB) {
 	stmt := db.Statement
 	if stmt.Schema == nil {
 		return
 	}
 
-	if idField := stmt.Schema.LookUpField("ID"); idField != nil {
-		if _, isZero := idField.ValueOf(stmt.Context, stmt.ReflectValue); isZero {
-			_ = db.AddError(idField.Set(stmt.Context, stmt.ReflectValue, uuid.GenerateID()))
+	idField := stmt.Schema.LookUpField("ID")
+	versionField := stmt.Schema.LookUpField("Version")
+
+	switch stmt.ReflectValue.Kind() {
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < stmt.ReflectValue.Len(); i++ {
+			setBaseModelFields(db, idField, versionField, reflect.Indirect(stmt.ReflectValue.Index(i)))
+		}
+	default:
+		setBaseModelFields(db, idField, versionField, stmt.ReflectValue)
+	}
+}
+
+func setBaseModelFields(db *gorm.DB, idField, versionField *schema.Field, value reflect.Value) {
+	if idField != nil {
+		if _, isZero := idField.ValueOf(db.Statement.Context, value); isZero {
+			_ = db.AddError(idField.Set(db.Statement.Context, value, uuid.GenerateID()))
 		}
 	}
-
-	if versionField := stmt.Schema.LookUpField("Version"); versionField != nil {
-		if _, isZero := versionField.ValueOf(stmt.Context, stmt.ReflectValue); isZero {
-			_ = db.AddError(versionField.Set(stmt.Context, stmt.ReflectValue, 1))
+	if versionField != nil {
+		if _, isZero := versionField.ValueOf(db.Statement.Context, value); isZero {
+			_ = db.AddError(versionField.Set(db.Statement.Context, value, 1))
 		}
 	}
 }

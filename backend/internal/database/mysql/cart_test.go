@@ -148,6 +148,15 @@ func TestCartRepository_UpdateItemQuantity(t *testing.T) {
 		}
 	})
 
+	t.Run("既存の値と同じ数量を指定しても成功する(ErrRecordNotFoundにならない)", func(t *testing.T) {
+		// clientFoundRows=trueが効いていない場合、値が変化しないUPDATEは
+		// RowsAffected=0になり誤ってErrRecordNotFoundを返してしまう
+		// (connect.go withClientFoundRowsの回帰テスト)。
+		if err := repo.UpdateItemQuantity(ctx, c.ID, p.ID, 9); err != nil {
+			t.Fatalf("UpdateItemQuantity() error = %v", err)
+		}
+	})
+
 	t.Run("存在しない明細の変更はErrRecordNotFound", func(t *testing.T) {
 		err := repo.UpdateItemQuantity(ctx, c.ID, "non-existent-product", 1)
 		if !pkgerrors.Is(err, pkgerrors.ErrRecordNotFound) {

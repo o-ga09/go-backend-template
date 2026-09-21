@@ -54,13 +54,15 @@ var (
 	ErrInvalidULID = ergo.New("invalid ulid")
 
 	// データベースエラー
-	// ErrRecordNotFound はgorm.ErrRecordNotFoundそのもの。mysqlパッケージの
-	// リポジトリはこれを個別に変換せずそのまま返す(coding-style.md参照)。
+	// ErrRecordNotFound/ErrForeignKeyConstraint/ErrUniqueConstraintはGORMの
+	// センチネルそのもの。TranslateError:trueなGORM接続(mysql/connect.go)が
+	// ドライバ固有のエラー番号(1062/1451/1452等)をこれらに変換するため、
+	// mysqlパッケージのリポジトリは個別に変換せずそのまま返す(coding-style.md参照)。
 	ErrRecordNotFound         = gorm.ErrRecordNotFound
 	ErrConflict               = ergo.New("conflict")
 	ErrOptimisticLockConflict = ergo.New("optimistic lock conflict")
-	ErrForeignKeyConstraint   = ergo.New("foreign key constraint error")
-	ErrUniqueConstraint       = ergo.New("unique constraint error")
+	ErrForeignKeyConstraint   = gorm.ErrForeignKeyViolated
+	ErrUniqueConstraint       = gorm.ErrDuplicatedKey
 
 	// セッションエラー
 	ErrInvalidSession = ergo.NewSentinel("invalid session")

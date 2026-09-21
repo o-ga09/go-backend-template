@@ -33,9 +33,6 @@ func (r *cartRepository) FindByUserID(ctx context.Context, userID string) (*cart
 func (r *cartRepository) Create(ctx context.Context, userID string) (*cart.Cart, error) {
 	c := &cart.Cart{UserID: userID}
 	if err := Ctx.GetDBFromCtx(ctx).Create(c).Error; err != nil {
-		if isDuplicateEntryErr(err) {
-			return nil, pkgerrors.ErrUniqueConstraint
-		}
 		return nil, err
 	}
 	return c, nil
@@ -58,26 +55,23 @@ func (r *cartRepository) AddItem(ctx context.Context, cartID, productID string, 
 	}
 
 	newItem := &cart.CartItem{CartID: cartID, ProductID: productID, Quantity: quantity}
-	if err := db.Create(newItem).Error; err != nil {
-		if isDuplicateEntryErr(err) {
-			return pkgerrors.ErrUniqueConstraint
-		}
-		return err
-	}
-	return nil
+	return db.Create(newItem).Error
 }
 
+// 対象行の存在確認と更新を1回のUPDATEで行う(件数確認のためのSELECTを別途発行しない)。
+// RowsAffected == 0であれば対象の明細が無いとみなす(withClientFoundRowsにより、
+// 値が変化しない更新でもWHERE句に一致していればRowsAffectedは1になる)。
 func (r *cartRepository) UpdateItemQuantity(ctx context.Context, cartID, productID string, quantity int) error {
-	db := Ctx.GetDBFromCtx(ctx)
-
-	var item cart.CartItem
-	if err := db.Where("cart_id = ? AND product_id = ?", cartID, productID).First(&item).Error; err != nil {
-		return err
+	res := Ctx.GetDBFromCtx(ctx).Model(&cart.CartItem{}).
+		Where("cart_id = ? AND product_id = ?", cartID, productID).
+		Updates(map[string]interface{}{"quantity": quantity})
+	if res.Error != nil {
+		return res.Error
 	}
-
-	return db.Model(&item).Updates(map[string]interface{}{
-		"quantity": quantity,
-	}).Error
+	if res.RowsAffected == 0 {
+		return pkgerrors.ErrRecordNotFound
+	}
+	return nil
 }
 
 func (r *cartRepository) RemoveItem(ctx context.Context, cartID, productID string) error {

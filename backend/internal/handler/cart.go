@@ -174,9 +174,6 @@ func (h *cartHandler) UpdateItem(c *echo.Context) error {
 		if errors.Is(err, errors.ErrRecordNotFound) {
 			return errors.MakeNotFoundError(ctx, "cart item not found")
 		}
-		if errors.Is(err, errors.ErrOptimisticLockConflict) {
-			return errors.MakeConflictError(ctx, "cart item update conflict")
-		}
 		return errors.Wrap(ctx, err)
 	}
 
