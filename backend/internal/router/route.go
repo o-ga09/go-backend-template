@@ -2,6 +2,7 @@ package router
 
 import (
 	"github.com/labstack/echo/v5"
+	"github.com/o-ga09/go-backend-template/internal/database"
 	"github.com/o-ga09/go-backend-template/internal/database/mysql"
 	"github.com/o-ga09/go-backend-template/internal/handler"
 	"github.com/o-ga09/go-backend-template/pkg/config"
@@ -9,9 +10,12 @@ import (
 )
 
 type route struct {
-	rooAPI *echo.Group
-	user   handler.IUser
-	auth   handler.IAuth
+	rooAPI  *echo.Group
+	user    handler.IUser
+	auth    handler.IAuth
+	product handler.IProduct
+	cart    handler.ICart
+	order   handler.IOrder
 }
 
 type IRouting interface {
@@ -21,10 +25,17 @@ type IRouting interface {
 
 func New(root *echo.Group, cfg config.Config) IRouting {
 	userRepo := mysql.NewUserRepository()
+	productRepo := mysql.NewProductRepository()
+	cartRepo := mysql.NewCartRepository()
+	orderRepo := mysql.NewOrderRepository()
+	txManager := database.NewTransactionManager()
 	sessionMgr := session.NewManager(cfg.SessionSecret, session.SessionTTL)
 	return &route{
-		rooAPI: root,
-		user:   handler.NewUserHandler(userRepo, sessionMgr),
-		auth:   handler.NewAuthHandler(userRepo),
+		rooAPI:  root,
+		user:    handler.NewUserHandler(userRepo, sessionMgr),
+		auth:    handler.NewAuthHandler(userRepo),
+		product: handler.NewProductHandler(productRepo),
+		cart:    handler.NewCartHandler(cartRepo, productRepo, txManager),
+		order:   handler.NewOrderHandler(orderRepo, cartRepo, productRepo, txManager),
 	}
 }

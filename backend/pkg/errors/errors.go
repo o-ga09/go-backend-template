@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	"github.com/newmo-oss/ergo"
+	"gorm.io/gorm"
+
 	"github.com/o-ga09/go-backend-template/pkg/logger"
 )
 
@@ -52,15 +54,32 @@ var (
 	ErrInvalidULID = ergo.New("invalid ulid")
 
 	// データベースエラー
-	ErrRecordNotFound         = ergo.New("record not found")
+	// ErrRecordNotFound/ErrForeignKeyConstraint/ErrUniqueConstraintはGORMの
+	// センチネルそのもの。TranslateError:trueなGORM接続(mysql/connect.go)が
+	// ドライバ固有のエラー番号(1062/1451/1452等)をこれらに変換するため、
+	// mysqlパッケージのリポジトリは個別に変換せずそのまま返す(coding-style.md参照)。
+	ErrRecordNotFound         = gorm.ErrRecordNotFound
 	ErrConflict               = ergo.New("conflict")
 	ErrOptimisticLockConflict = ergo.New("optimistic lock conflict")
-	ErrForeignKeyConstraint   = ergo.New("foreign key constraint error")
-	ErrUniqueConstraint       = ergo.New("unique constraint error")
+	ErrForeignKeyConstraint   = gorm.ErrForeignKeyViolated
+	ErrUniqueConstraint       = gorm.ErrDuplicatedKey
 
 	// セッションエラー
 	ErrInvalidSession = ergo.NewSentinel("invalid session")
 	ErrSessionExpired = ergo.NewSentinel("session expired")
+
+	// カートエラー
+	// ErrCartEmpty はカートに商品が無い状態で注文確定しようとした場合のエラー
+	// (cart.Cart.CanCheckout)。呼び出し元がerrors.Is(err, ErrCartEmpty)で判別できるよう
+	// ergo.NewSentinelで定義する(errors.Newで毎回生成すると呼び出し元が種別判定できない)。
+	ErrCartEmpty = ergo.NewSentinel("cart has no items")
+
+	// 注文エラー
+	// ErrInsufficientStock は注文確定時にカート内商品の在庫が不足している場合の
+	// エラー(order.NewFromCart)。呼び出し元がerrors.Is(err, ErrInsufficientStock)で
+	// 判別しerrors.MakeBusinessErrorに変換できるよう、ErrCartEmptyと同様に
+	// ergo.NewSentinelで定義する。
+	ErrInsufficientStock = ergo.NewSentinel("insufficient stock")
 
 	// 画像エラー
 	ErrInvalidImageType  = ergo.New("ファイルの種類が不正です。")

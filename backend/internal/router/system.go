@@ -30,4 +30,15 @@ func (r *route) SetupSystemRoute() {
 	system.GET("/time", func(c *echo.Context) error {
 		return c.JSON(200, map[string]string{"time": Ctx.GetRequestTime(c.Request().Context()).String()})
 	})
+
+	// CSRFトークン発行。internal/server/middleware.goのCSRFProtectionミドルウェアが
+	// 検証に使うトークンをJSONで返す(ダブルサブミットCookie方式のフォールバック用)。
+	// フロントエンドの正規オリジンからのfetch/XHRはSec-Fetch-Siteヘッダーにより
+	// 自動的に許可されるため、通常はこのエンドポイントを呼ぶ必要はない。
+	// Sec-Fetch-Siteを送らない環境向けに、このエンドポイントで取得したトークンを
+	// 以降の状態変更リクエストのX-CSRF-Tokenヘッダーに設定する。
+	r.rooAPI.GET("/csrf", func(c *echo.Context) error {
+		token, _ := c.Get("csrf").(string)
+		return c.JSON(200, map[string]string{"csrfToken": token})
+	})
 }

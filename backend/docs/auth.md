@@ -94,6 +94,37 @@ MVPでは2を採用した。
 `GET /api/users/:id` はこのロジックを使った実装例で、ログイン中ユーザー以外のIDが
 指定された場合は `errors.MakeAuthorizationError` (403) を返す。
 
+## CSRF対策 (Issue #4)
+
+セッションCookieを `SameSite=None` で発行する設計(上記)は、クロスオリジンの
+`credentials: 'include'` フェッチを成立させるために必須だが、副作用として
+**クロスサイトのリクエスト(第三者サイトの自動送信フォーム等)でもCookieが自動送信される**
+ため、状態変更エンドポイント自体にCSRF対策が無いと悪用されうる。Issue #3時点では
+状態変更エンドポイントが `POST /api/users` (初回のみ・実害が限定的)しか無かったため
+未対応だったが、Issue #4で `POST /api/orders` (ボディ無しで注文確定・在庫減算という
+副作用を起こせる)等が追加されたことで顕在化したため、このIssueで対応した。
+
+### 採用した方式: echo v5組み込みCSRFミドルウェア(`internal/server/middleware.go` の`CSRFProtection`)
+
+優先されるのは **`Sec-Fetch-Site` ヘッダー(Fetch Metadata)による検証**。モダンブラウザの
+fetch/XHRはこのヘッダーを自動付与し、クライアント側のJavaScriptから改ざんできないため、
+`Origin` ヘッダーとの組み合わせで正規のクロスオリジン元(`pkg/config.Config.FrontendOrigin`
+を`TrustedOrigins`に設定)からのリクエストかどうかを確実に検証できる。これにより
+**フロントエンド側の実装変更は不要**(トークンの送出・保持が要らない)。
+
+`Sec-Fetch-Site` を送らない環境(古いブラウザ等)向けには、ダブルサブミットCookie方式
+(`X-CSRF-Token` ヘッダー)にフォールバックする。トークンは `GET /api/csrf`
+(`internal/router/system.go`)で取得できる形にしてあるが、対象ブラウザが実質存在しない
+現状ではこの経路がテスト以外で使われる想定は薄い(将来的なブラウザ後方互換性のための
+保険)。
+
+### 適用範囲
+
+`CSRFProtection` は全リクエストに対して有効(GET/HEAD/OPTIONS/TRACEは検証対象外)。
+特定のドメインだけを対象にするスキップ設定は行っていない(このプロジェクトの他の
+ミドルウェア同様、`internal/server/server.go` の `Run()` でグローバルに適用する方針に
+合わせた)。
+
 ## このIssueで合わせて修正した既存のバグ
 
 実装を進める中で、認証・認可の受け入れ条件(401/403の判定)自体をブロックする以下の

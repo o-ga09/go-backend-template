@@ -196,6 +196,39 @@ if errors.Is(err, errors.ErrRecordNotFound) {
 }
 ```
 
+### `mysql` パッケージでNotFoundを個別に変換しない 🔴
+
+`pkg/errors.ErrRecordNotFound` は `gorm.ErrRecordNotFound` そのものを指す
+（`pkg/errors/errors.go`）。GORMの`First`/`Take`等が返す`gorm.ErrRecordNotFound`は
+そのまま`errors.ErrRecordNotFound`として扱えるため、`internal/database/mysql/`の
+各リポジトリメソッドで`stderrors.Is(err, gorm.ErrRecordNotFound)`を判定して
+独自エラーに変換する必要はない。エラーはそのまま呼び出し元に返す。
+
+```go
+// 誤: リポジトリメソッドごとに変換の分岐を書く(不要な重複)
+if err := db.Where("id = ?", id).First(&p).Error; err != nil {
+    if stderrors.Is(err, gorm.ErrRecordNotFound) {
+        return nil, pkgerrors.ErrRecordNotFound
+    }
+    return nil, err
+}
+
+// 正: そのまま返す(呼び出し元はerrors.Is(err, errors.ErrRecordNotFound)で判定できる)
+if err := db.Where("id = ?", id).First(&p).Error; err != nil {
+    return nil, err
+}
+```
+
+一意制約違反・外部キー制約違反も同様。`internal/database/mysql/connect.go`が
+`gorm.Config{TranslateError: true}`でGORMを開いているため、MySQLドライバの
+`error_translator.go`がエラー番号1062/1451/1452を`gorm.ErrDuplicatedKey`/
+`gorm.ErrForeignKeyViolated`へ自動変換する。`pkg/errors.ErrUniqueConstraint`/
+`ErrForeignKeyConstraint`はこれらのエイリアスのため、**リポジトリ側で
+MySQLエラー番号を手動判定する独自関数（`isDuplicateEntryErr`等）を書かない**。
+GORMが対応していない分類（楽観ロック競合等）だけ、
+`internal/database/mysql/base_model_plugin.go`のようにGORMプラグインへ
+集約する（各リポジトリメソッドに個別実装しない）。
+
 ## handler でのエラー変換
 
 - Echo handler では `errors.GetCode(err)` で HTTP ステータスを取得してレスポンスに変換する
