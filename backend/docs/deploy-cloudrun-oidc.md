@@ -14,6 +14,12 @@
 - `<SERVICE_ACCOUNT_NAME>`: サービスアカウント名 (例: `github-actions-deploy`)
 - `<DATABASE_URL>`: データベース接続文字列 (例: `user:password@tcp(host:3306)/dbname?parseTime=true`)
 - `<GCP_PROJECT_NUMBER>`: Google CloudのプロジェクトID番号
+- `<FRONTEND_ORIGIN>`: フロントエンド(Next.js)のオリジン (例: `https://example.vercel.app`)。
+  CORSの許可オリジン・CSRF対策の信頼済みオリジン(`internal/server/middleware.go`の
+  `CORS()`/`CSRFProtection()`)の両方に使われる。GitHub Secretsに`FRONTEND_ORIGIN`として
+  登録すること。未設定の場合は`pkg/config.Config.FrontendOrigin`のデフォルト値
+  (`http://localhost:3000`)が使われ、本番のフロントエンドからの状態変更リクエスト
+  (ログイン・カート操作・注文確定等)がすべてCSRF対策により拒否される。
 
 ---
 

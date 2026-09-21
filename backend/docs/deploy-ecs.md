@@ -19,6 +19,10 @@
 - `<GITHUB_ORG>`: GitHubの組織名またはユーザー名
 - `<GITHUB_REPO>`: GitHubのリポジトリ名
 - `<DATABASE_URL>`: データベース接続文字列
+- `<FRONTEND_ORIGIN>`: フロントエンド(Next.js)のオリジン (例: `https://example.vercel.app`)。
+  CORSの許可オリジン・CSRF対策の信頼済みオリジンの両方に使われる。未設定の場合は
+  `pkg/config.Config.FrontendOrigin`のデフォルト値(`http://localhost:3000`)が使われ、
+  本番のフロントエンドからの状態変更リクエストがすべてCSRF対策により拒否される。
 - `<CONTAINER_NAME>`: コンテナ名 (例: `go-backend-container`)
 - `<LOG_GROUP_NAME>`: CloudWatch Logsのロググループ名 (例: `/ecs/go-backend`)
 
@@ -285,6 +289,10 @@ aws ecs create-cluster \
         {
           "name": "PROJECT_ID",
           "value": "<ECS_SERVICE_NAME>"
+        },
+        {
+          "name": "FRONTEND_ORIGIN",
+          "value": "<FRONTEND_ORIGIN>"
         }
       ],
       "secrets": [

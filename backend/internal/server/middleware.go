@@ -129,11 +129,27 @@ func CORS(ctx context.Context) echo.MiddlewareFunc {
 // Sec-Fetch-Siteを送らない環境(古いブラウザ等)向けには、ダブルサブミットCookie
 // 方式(X-CSRF-Tokenヘッダー)にフォールバックする。トークンは`GET /api/csrf`
 // (internal/router/system.go)で取得できる。
+//
+// echoのCSRFミドルウェアは、Sec-Fetch-Site起因の拒否(TrustedOriginsに一致しない
+// state-changingリクエスト)を`ErrorHandler`(下記)を経由せずecho.HTTPErrorとして
+// 直接returnする(config.AllowSecFetchSiteFuncを指定しない場合)。ErrorHandler()
+// ミドルウェア(server.goでの登録順によりこのミドルウェアの外側に位置する)は
+// pkg/errorsのコードを持たないerrorを変換できず500になってしまうため、
+// AllowSecFetchSiteFuncを明示して同じpkg/errors経由の403に揃える
+// (レガシー経路のErrorHandlerと合わせて、拒否は必ずMakeAuthorizationError経由にする)。
 func CSRFProtection(ctx context.Context) echo.MiddlewareFunc {
 	cfg := Ctx.GetCfgFromCtx(ctx)
+	forbidden := func(c *echo.Context, msg string) (bool, error) {
+		return false, errors.MakeAuthorizationError(c.Request().Context(), msg)
+	}
 	return middleware.CSRFWithConfig(middleware.CSRFConfig{
 		TrustedOrigins: []string{cfg.FrontendOrigin},
 		CookieSameSite: http.SameSiteNoneMode,
+		CookiePath:     "/",
+		CookieHTTPOnly: true,
+		AllowSecFetchSiteFunc: func(c *echo.Context) (bool, error) {
+			return forbidden(c, "cross-site request blocked by csrf")
+		},
 		ErrorHandler: func(c *echo.Context, err error) error {
 			return errors.MakeAuthorizationError(c.Request().Context(), "invalid csrf token")
 		},
