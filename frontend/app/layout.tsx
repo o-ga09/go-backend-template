@@ -6,6 +6,8 @@ import NextTopLoader from 'nextjs-toploader'
 import { topLoaderConfig } from '@/lib/loaderConfig'
 import { Toaster } from '@/components/ui/sonner'
 import { SessionProvider } from '@/providers/sessionProvider'
+import { SiteHeader } from '@/components/site-header'
+import { MSWProvider } from '@/components/msw-provider'
 
 export const viewport = 'width=device-width, initial-scale=1'
 
@@ -17,15 +19,18 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <SessionProvider>
-          <AuthProvider>
-            <ApiProvider>
-              <NextTopLoader {...topLoaderConfig} />
-              {children}
-              <Toaster />
-            </ApiProvider>
-          </AuthProvider>
-        </SessionProvider>
+        <MSWProvider>
+          <SessionProvider>
+            <AuthProvider>
+              <ApiProvider>
+                <NextTopLoader {...topLoaderConfig} />
+                <SiteHeader />
+                {children}
+                <Toaster />
+              </ApiProvider>
+            </AuthProvider>
+          </SessionProvider>
+        </MSWProvider>
       </body>
     </html>
   )

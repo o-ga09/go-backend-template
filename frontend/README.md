@@ -20,6 +20,18 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## バックエンドAPIをモックして起動する(MSW)
+
+`backend/` を起動せずに商品一覧・カート・注文系画面を確認したい場合、`NEXT_PUBLIC_API_MOCKING=enabled` を指定して起動すると [MSW](https://mswjs.io/) が `mocks/handlers.ts` 定義のレスポンスでAPIをモックする。
+
+```bash
+NEXT_PUBLIC_API_MOCKING=enabled pnpm dev
+```
+
+- モックの内容(レスポンス)を変えたい場合は `mocks/handlers.ts` を編集する(vitestのテストとブラウザの両方で同じハンドラを共有している)
+- NextAuthのログインセッション自体はモックしていないため、Googleログインは引き続き必要(認証必須画面はログインしないと表示できない)
+- 通常の `pnpm dev`(環境変数未指定)では従来通り実際のバックエンドAPIを呼び出す
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
