@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { filterProductsByName } from './api'
+import { http, HttpResponse } from 'msw'
+import { API_BASE_URL } from '@/tests/mocks/handlers'
+import { server } from '@/tests/mocks/server'
+import { fetchProduct, fetchProducts, filterProductsByName } from './api'
 import type { Product } from './types'
 
 const products: Product[] = [
@@ -23,5 +26,21 @@ describe('filterProductsByName', () => {
 
   it('一致する商品が無い場合は空配列を返す', () => {
     expect(filterProductsByName(products, '存在しない商品')).toEqual([])
+  })
+})
+
+describe('fetchProducts', () => {
+  it('GET /api/productsのレスポンスをそのまま返す', async () => {
+    server.use(http.get(`${API_BASE_URL}/api/products`, () => HttpResponse.json(products)))
+
+    await expect(fetchProducts()).resolves.toEqual(products)
+  })
+})
+
+describe('fetchProduct', () => {
+  it('GET /api/products/:idで指定した商品を取得する', async () => {
+    server.use(http.get(`${API_BASE_URL}/api/products/p1`, () => HttpResponse.json(products[0])))
+
+    await expect(fetchProduct('p1')).resolves.toEqual(products[0])
   })
 })
