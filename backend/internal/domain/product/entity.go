@@ -28,10 +28,17 @@ func (Product) TableName() string {
 
 // IProductRepository は商品ドメインの永続化用インターフェース。
 // 実装はinternal/database/mysql.productRepository(GORM)。
-// 商品の作成/更新は本Issue(#4)のスコープ外(読み取り専用)。
+// 商品の作成/更新は本Issue(#4)のスコープ外だが、注文確定に伴う在庫減算
+// (DecreaseStock)のみ例外として持つ(在庫管理そのものは本ドメインの責務)。
 type IProductRepository interface {
 	// FindByID はIDで商品を検索する。見つからない場合はerrors.ErrRecordNotFoundを返す。
 	FindByID(ctx context.Context, id string) (*Product, error)
 	// List は商品を全件取得する。ページングは今回不要(YAGNI)。
 	List(ctx context.Context) ([]*Product, error)
+	// DecreaseStock は指定数量だけ在庫を減算する。「stock >= quantity」を満たす
+	// 場合のみ更新する条件付きUPDATEで実装するため、注文確定前の事前チェックと
+	// この呼び出しの間に他の注文が割り込んでも(TOCTOU)在庫がマイナスになることは
+	// ない。在庫が不足している場合はerrors.ErrInsufficientStockを返す。
+	// 注文確定処理からITransactionManager.RunInTx内で呼ばれる想定。
+	DecreaseStock(ctx context.Context, productID string, quantity int) error
 }

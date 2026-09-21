@@ -15,8 +15,9 @@ import (
 
 // IProductRepositoryMock はproduct.IProductRepositoryのテスト用モック。
 type IProductRepositoryMock struct {
-	FindByIDFunc func(ctx context.Context, id string) (*product.Product, error)
-	ListFunc     func(ctx context.Context) ([]*product.Product, error)
+	FindByIDFunc      func(ctx context.Context, id string) (*product.Product, error)
+	ListFunc          func(ctx context.Context) ([]*product.Product, error)
+	DecreaseStockFunc func(ctx context.Context, productID string, quantity int) error
 
 	calls struct {
 		FindByID []struct {
@@ -26,9 +27,15 @@ type IProductRepositoryMock struct {
 		List []struct {
 			Ctx context.Context
 		}
+		DecreaseStock []struct {
+			Ctx       context.Context
+			ProductID string
+			Quantity  int
+		}
 	}
-	lockFindByID sync.RWMutex
-	lockList     sync.RWMutex
+	lockFindByID      sync.RWMutex
+	lockList          sync.RWMutex
+	lockDecreaseStock sync.RWMutex
 }
 
 var _ product.IProductRepository = (*IProductRepositoryMock)(nil)
@@ -54,6 +61,18 @@ func (m *IProductRepositoryMock) List(ctx context.Context) ([]*product.Product, 
 	return m.ListFunc(ctx)
 }
 
+// DecreaseStock はDecreaseStockFuncを呼び出し、呼び出し履歴を記録する。
+func (m *IProductRepositoryMock) DecreaseStock(ctx context.Context, productID string, quantity int) error {
+	m.lockDecreaseStock.Lock()
+	m.calls.DecreaseStock = append(m.calls.DecreaseStock, struct {
+		Ctx       context.Context
+		ProductID string
+		Quantity  int
+	}{ctx, productID, quantity})
+	m.lockDecreaseStock.Unlock()
+	return m.DecreaseStockFunc(ctx, productID, quantity)
+}
+
 // FindByIDCalls はFindByIDの呼び出し履歴を返す。
 func (m *IProductRepositoryMock) FindByIDCalls() []struct {
 	Ctx context.Context
@@ -71,4 +90,15 @@ func (m *IProductRepositoryMock) ListCalls() []struct {
 	m.lockList.RLock()
 	defer m.lockList.RUnlock()
 	return m.calls.List
+}
+
+// DecreaseStockCalls はDecreaseStockの呼び出し履歴を返す。
+func (m *IProductRepositoryMock) DecreaseStockCalls() []struct {
+	Ctx       context.Context
+	ProductID string
+	Quantity  int
+} {
+	m.lockDecreaseStock.RLock()
+	defer m.lockDecreaseStock.RUnlock()
+	return m.calls.DecreaseStock
 }

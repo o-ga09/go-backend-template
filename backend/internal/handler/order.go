@@ -96,8 +96,18 @@ func (h *orderHandler) Create(c *echo.Context) error {
 		if err := h.orderRepo.Create(txCtx, o); err != nil {
 			return err
 		}
+		for _, item := range o.Items {
+			if err := h.productRepo.DecreaseStock(txCtx, item.ProductID, item.Quantity); err != nil {
+				return err
+			}
+		}
 		return h.cartRepo.Clear(txCtx, ct.ID)
 	}); err != nil {
+		if errors.Is(err, errors.ErrInsufficientStock) {
+			// 事前チェック(NewFromCart)後、書き込み直前に他の注文が在庫を
+			// 消費した競合。422(バリデーション違反)ではなく409(競合)として扱う。
+			return errors.MakeConflictError(ctx, "insufficient stock")
+		}
 		return errors.Wrap(ctx, err)
 	}
 

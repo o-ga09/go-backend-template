@@ -117,3 +117,48 @@ func TestProductRepository_FindByIDAndList(t *testing.T) {
 		}
 	})
 }
+
+func TestProductRepository_DecreaseStock(t *testing.T) {
+	ctx := setupCtx(t)
+	repo := mysql.NewProductRepository()
+
+	t.Run("在庫が足りる場合は減算される", func(t *testing.T) {
+		p := insertTestProduct(t, ctx, "decrease-target", "", 1000, 10)
+
+		if err := repo.DecreaseStock(ctx, p.ID, 3); err != nil {
+			t.Fatalf("DecreaseStock() error = %v", err)
+		}
+
+		got, err := repo.FindByID(ctx, p.ID)
+		if err != nil {
+			t.Fatalf("FindByID() error = %v", err)
+		}
+		if got.Stock != 7 {
+			t.Errorf("Stock = %d, want %d", got.Stock, 7)
+		}
+	})
+
+	t.Run("在庫が不足している場合はErrInsufficientStockを返し在庫は変わらない", func(t *testing.T) {
+		p := insertTestProduct(t, ctx, "insufficient-target", "", 1000, 2)
+
+		err := repo.DecreaseStock(ctx, p.ID, 3)
+		if !pkgerrors.Is(err, pkgerrors.ErrInsufficientStock) {
+			t.Fatalf("error = %v, want ErrInsufficientStock", err)
+		}
+
+		got, err := repo.FindByID(ctx, p.ID)
+		if err != nil {
+			t.Fatalf("FindByID() error = %v", err)
+		}
+		if got.Stock != 2 {
+			t.Errorf("Stock = %d, want unchanged %d", got.Stock, 2)
+		}
+	})
+
+	t.Run("存在しない商品IDはErrInsufficientStockを返す", func(t *testing.T) {
+		err := repo.DecreaseStock(ctx, "non-existent-id", 1)
+		if !pkgerrors.Is(err, pkgerrors.ErrInsufficientStock) {
+			t.Errorf("error = %v, want ErrInsufficientStock", err)
+		}
+	})
+}

@@ -77,7 +77,8 @@ func (r *orderRepository) findItems(ctx context.Context, db *gorm.DB, orderID st
 }
 
 // ListByUserID はユーザーIDで注文一覧(明細含む)を作成日時の降順で取得する。
-// ページングは今回不要(YAGNI)。
+// ページングは今回不要(YAGNI)。明細は注文件数ぶんクエリを発行せず、
+// 対象の注文IDをまとめて1回のIN句で取得しメモリ上で詰め替える(N+1回避)。
 func (r *orderRepository) ListByUserID(ctx context.Context, userID string) ([]*order.Order, error) {
 	db := Ctx.GetDBFromCtx(ctx)
 
@@ -85,13 +86,26 @@ func (r *orderRepository) ListByUserID(ctx context.Context, userID string) ([]*o
 	if err := db.WithContext(ctx).Where("user_id = ?", userID).Order("created_at DESC, id DESC").Find(&orders).Error; err != nil {
 		return nil, err
 	}
+	if len(orders) == 0 {
+		return orders, nil
+	}
 
+	orderIDs := make([]string, len(orders))
+	for i, o := range orders {
+		orderIDs[i] = o.ID
+	}
+
+	var items []order.OrderItem
+	if err := db.WithContext(ctx).Where("order_id IN ?", orderIDs).Order("created_at ASC, id ASC").Find(&items).Error; err != nil {
+		return nil, err
+	}
+
+	itemsByOrderID := make(map[string][]order.OrderItem, len(orders))
+	for _, item := range items {
+		itemsByOrderID[item.OrderID] = append(itemsByOrderID[item.OrderID], item)
+	}
 	for _, o := range orders {
-		items, err := r.findItems(ctx, db, o.ID)
-		if err != nil {
-			return nil, err
-		}
-		o.Items = items
+		o.Items = itemsByOrderID[o.ID]
 	}
 	return orders, nil
 }

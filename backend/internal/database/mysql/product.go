@@ -46,3 +46,28 @@ func (r *productRepository) List(ctx context.Context) ([]*product.Product, error
 	}
 	return ps, nil
 }
+
+// DecreaseStock は指定数量だけ在庫を減算する。「WHERE stock >= quantity」を
+// 条件に含む1回のUPDATEで実装しており、これ自体が在庫不足の判定を兼ねる
+// (RowsAffected == 0なら在庫不足)。事前チェック(HasStock)からこの呼び出しまでの
+// 間に他のリクエストが在庫を消費しても、条件付きUPDATEにより在庫がマイナスに
+// なることはない(TOCTOU耐性)。
+//
+// UpdateColumnはBaseModelPluginのUpdateフック(楽観ロック)の対象外になる
+// (呼び出しに使うproduct.Product{}のVersionがゼロ値のため、
+// base_model_plugin.goのbeforeUpdateが早期returnする)。在庫の排他制御は
+// この条件付きUPDATE自体が担うため、Versionによる楽観ロックとは独立している。
+func (r *productRepository) DecreaseStock(ctx context.Context, productID string, quantity int) error {
+	db := Ctx.GetDBFromCtx(ctx)
+
+	result := db.WithContext(ctx).Model(&product.Product{}).
+		Where("id = ? AND stock >= ?", productID, quantity).
+		UpdateColumn("stock", gorm.Expr("stock - ?", quantity))
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return pkgerrors.ErrInsufficientStock
+	}
+	return nil
+}

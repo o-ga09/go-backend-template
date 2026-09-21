@@ -96,4 +96,42 @@ func TestOrderRepository_CreateFindByIDAndListByUserID(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("複数注文がある場合、明細がまとめて取得されても注文ごとに正しく振り分けられる", func(t *testing.T) {
+		o2 := &order.Order{
+			UserID:        u.ID,
+			Status:        order.StatusPending,
+			TotalPriceYen: 500 * 3,
+			Items: []order.OrderItem{
+				{ProductID: p2.ID, Quantity: 3, UnitPriceYen: 500},
+			},
+		}
+		if err := repo.Create(ctx, o2); err != nil {
+			t.Fatalf("Create() error = %v", err)
+		}
+
+		got, err := repo.ListByUserID(ctx, u.ID)
+		if err != nil {
+			t.Fatalf("ListByUserID() error = %v", err)
+		}
+
+		var gotO1, gotO2 *order.Order
+		for _, ord := range got {
+			switch ord.ID {
+			case o.ID:
+				gotO1 = ord
+			case o2.ID:
+				gotO2 = ord
+			}
+		}
+		if gotO1 == nil || gotO2 == nil {
+			t.Fatalf("ListByUserID() result missing orders (o1found=%v, o2found=%v)", gotO1 != nil, gotO2 != nil)
+		}
+		if len(gotO1.Items) != 2 {
+			t.Errorf("order1 Items length = %d, want 2", len(gotO1.Items))
+		}
+		if len(gotO2.Items) != 1 || gotO2.Items[0].Quantity != 3 {
+			t.Errorf("order2 Items = %+v, want single item with quantity=3", gotO2.Items)
+		}
+	})
 }
