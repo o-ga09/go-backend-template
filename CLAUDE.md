@@ -82,6 +82,8 @@ pnpm format
 - **外部API呼び出しとトランザクションを重ねない。** 応答時間が読めない外部呼び出しの間 DB 接続を占有すると、Cloud Run のスケール0起動時などに接続が枯渇しやすいため、「外部API呼び出し（トランザクション外）→ 短いトランザクションでの書き込み」の順序に固定する
 - **エラーは `pkg/errors`（ergoベース）に統一する。** エラーコードとスタックトレースを一貫した形で持たせ、`errors.GetCode(err)` から HTTP ステータスへ機械的に変換できるようにする。エラーメッセージに機密情報を載せない運用を、レビューで検出しやすい形（`Make*Error` の使用箇所を見るだけで判断できる）にする
 - **機密情報は `context.Context` に入れない。** パスワード・トークン・個人情報・決済情報は引数で渡し、生存スコープを最小にする
+- **在庫のような競合しうるカウンタの排他制御は、楽観ロック（`Version`）ではなく条件付き `UPDATE ... WHERE stock >= ?` で行う。**（Issue #4, `internal/database/mysql/product.go` の `DecreaseStock`）在庫チェック（`HasStock`）から実際の減算までの間に他の注文が割り込む TOCTOU を、条件付きUPDATE自体が防ぐ。`UpdateColumn` + `gorm.Expr` を使うことで `BaseModelPlugin` の楽観ロックフック（`beforeUpdate`）を意図的にバイパスしており（渡す構造体の `Version` がゼロ値のため早期returnする）、この操作では `Version`/`UpdatedAt` は更新されない。事前チェック後の競合（`RowsAffected == 0`）は 409（`errors.MakeConflictError`）として扱う
+- **Cookie認証下の状態変更エンドポイントには CSRF 対策を必須とする。**（Issue #4, `internal/server/middleware.go` の `CSRFProtection`）セッションCookieは別オリジンのフロントエンドから `credentials: 'include'` で送るため `SameSite=None` で発行しており、これはクロスサイトリクエストでも自動送信される。echo v5組み込みのCSRFミドルウェアを使い、`Sec-Fetch-Site` ヘッダー（Fetch Metadata）による検証を優先することで、フロントエンド側の実装変更なしに正規のクロスオリジンリクエストのみを許可する（詳細は `backend/docs/auth.md`「CSRF対策」）
 
 新しいドメイン（EC商材の商品・カート・注文など）を追加する場合も、上記の方針（2層デフォルト・domain＝DBモデル・パッケージ構成）に従う。個別機能の設計は `design-feature` スキルで整理し、既存方針からの逸脱を含む大きな設計判断はこのセクションに追記する。
 

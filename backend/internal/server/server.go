@@ -58,6 +58,10 @@ func (s *Server) Run(ctx context.Context) error {
 	s.engine.Use(middleware.BodyLimit(bodyLimitBytes))
 	s.engine.Use(middleware.Gzip())
 	s.engine.Use(ErrorHandler())
+	// CSRFProtectionはErrorHandlerより後に登録する(echoのUse()は登録順に外側から
+	// ラップするため、後から登録したものほどハンドラに近い内側に位置する)。
+	// これによりCSRFエラーがErrorHandlerを経由しpkg/errorsの形式でレスポンスされる。
+	s.engine.Use(CSRFProtection(ctx))
 
 	// ルーティングの設定
 	s.route.SetupApplicationRoute()

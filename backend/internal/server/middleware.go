@@ -108,9 +108,35 @@ func CORS(ctx context.Context) echo.MiddlewareFunc {
 			http.MethodDelete,
 			http.MethodOptions,
 		},
-		AllowHeaders:     []string{"Content-Type"},
+		AllowHeaders:     []string{"Content-Type", echo.HeaderXCSRFToken},
 		AllowCredentials: true,
 		MaxAge:           86400, // 24 hours in seconds
+	})
+}
+
+// CSRFProtection はCSRF対策を行う。セッションCookie(Authenticate)はフロントエンド
+// (別オリジン)からcredentials: 'include'でアクセスするためSameSite=Noneで発行して
+// おり(cookie.go参照)、これはクロスサイトのフォームPOST等でも自動送信される。
+// POST/PUT/DELETE等の状態変更エンドポイント(cart/orders追加時に導入)は、
+// この対策が無いと第三者サイトからの偽装リクエストで副作用(注文確定・在庫減算等)
+// を起こされうる(CLAUDE.md「アーキテクチャの設計判断」参照)。
+//
+// echo v5組み込みのCSRFミドルウェアを使う。優先されるのは`Sec-Fetch-Site`
+// ヘッダー(Fetch Metadata)による検証で、モダンブラウザのfetch/XHRはこれを
+// 自動付与するため改ざん不可能な形でオリジンを検証できる。cfg.FrontendOrigin
+// をTrustedOriginsに指定することで、フロントエンドからの正規のクロスオリジン
+// リクエストはトークン無しで許可され、それ以外のクロスサイトオリジンは拒否される。
+// Sec-Fetch-Siteを送らない環境(古いブラウザ等)向けには、ダブルサブミットCookie
+// 方式(X-CSRF-Tokenヘッダー)にフォールバックする。トークンは`GET /api/csrf`
+// (internal/router/system.go)で取得できる。
+func CSRFProtection(ctx context.Context) echo.MiddlewareFunc {
+	cfg := Ctx.GetCfgFromCtx(ctx)
+	return middleware.CSRFWithConfig(middleware.CSRFConfig{
+		TrustedOrigins: []string{cfg.FrontendOrigin},
+		CookieSameSite: http.SameSiteNoneMode,
+		ErrorHandler: func(c *echo.Context, err error) error {
+			return errors.MakeAuthorizationError(c.Request().Context(), "invalid csrf token")
+		},
 	})
 }
 
