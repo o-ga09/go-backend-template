@@ -15,19 +15,14 @@ import (
 	"github.com/o-ga09/go-backend-template/pkg/errors"
 )
 
-// cartHandler はカートリソース(/api/cart)に関するエンドポイントを扱う。
-// シンプルなCRUDのためusecase層を挟まず、domainのリポジトリを直接呼び出す
-// (architecture.md「基本方針：レイヤードアーキテクチャ」)。
-// カート操作は全て認証必須で、常にログイン中ユーザー本人のカートのみを対象とする
-// (カートIDをリクエストから受け取らないため、所有者チェックは不要。
-// backend/tmp/task-3-brief.md参照)。
+// カートIDをリクエストから受け取らず常にrequesterIDでスコープするため、
+// 所有者チェックは不要。
 type cartHandler struct {
 	cartRepo    cart.ICartRepository
 	productRepo product.IProductRepository
 	txManager   database.ITransactionManager
 }
 
-// ICart はcartHandlerの公開インターフェース。
 type ICart interface {
 	Get(c *echo.Context) error
 	AddItem(c *echo.Context) error
@@ -35,13 +30,10 @@ type ICart interface {
 	RemoveItem(c *echo.Context) error
 }
 
-// NewCartHandler はcartHandlerを生成する。
 func NewCartHandler(cartRepo cart.ICartRepository, productRepo product.IProductRepository, txManager database.ITransactionManager) ICart {
 	return &cartHandler{cartRepo: cartRepo, productRepo: productRepo, txManager: txManager}
 }
 
-// Get はログイン中ユーザーのカートを取得する。カートが未作成の場合は
-// 空カート相当のレスポンスを返す(404にはしない)。
 // GET /api/cart
 func (h *cartHandler) Get(c *echo.Context) error {
 	ctx := c.Request().Context()
@@ -62,11 +54,6 @@ func (h *cartHandler) Get(c *echo.Context) error {
 	return c.JSON(http.StatusOK, response.FromCart(ct))
 }
 
-// AddItem はログイン中ユーザーのカートに商品を追加する。商品が存在しない場合は404、
-// カート内の既存数量と合わせて在庫が不足している場合は422を返す。
-// カートが未作成の場合は新規作成してから追加する(carts/cart_itemsへの書き込みは
-// ITransactionManager.RunInTxでラップする。transaction.md「複数テーブルへの
-// 書き込みを含む処理は必ずRunInTxでラップする」)。
 // POST /api/cart
 func (h *cartHandler) AddItem(c *echo.Context) error {
 	ctx := c.Request().Context()
@@ -92,9 +79,8 @@ func (h *cartHandler) AddItem(c *echo.Context) error {
 		return errors.Wrap(ctx, err)
 	}
 
-	// バリデーション(トランザクション外)。カート内に既に同じ商品がある場合は
-	// 加算後の数量で在庫を判定する(既存数量を無視すると、複数回の追加で
-	// 在庫を超過したカートが作れてしまうため)。
+	// 既存数量を無視すると複数回の追加で在庫超過したカートが作れてしまうため、
+	// 加算後の数量で在庫を判定する。
 	existing, err := h.cartRepo.FindByUserID(ctx, requesterID)
 	cartExists := true
 	if err != nil {
@@ -112,8 +98,6 @@ func (h *cartHandler) AddItem(c *echo.Context) error {
 		return errors.MakeBusinessError(ctx, "insufficient stock")
 	}
 
-	// DB書き込み(トランザクション内)。カートが未作成の場合の新規作成(carts)と
-	// 明細追加(cart_items)は複数テーブルへの書き込みのためRunInTxでラップする。
 	cartID := ""
 	if cartExists {
 		cartID = existing.ID
@@ -123,8 +107,7 @@ func (h *cartHandler) AddItem(c *echo.Context) error {
 			created, err := h.cartRepo.Create(txCtx, requesterID)
 			if err != nil {
 				if errors.Is(err, errors.ErrUniqueConstraint) {
-					// 同時リクエストで既にカートが作成されていた場合は、
-					// そちらを使う(Create競合をFindByUserIDへのフォールバックで吸収する)。
+					// 同時リクエストで既に作成されていた場合はそちらを使う。
 					found, ferr := h.cartRepo.FindByUserID(txCtx, requesterID)
 					if ferr != nil {
 						return ferr
@@ -138,9 +121,6 @@ func (h *cartHandler) AddItem(c *echo.Context) error {
 		}
 		return h.cartRepo.AddItem(txCtx, cartID, req.ProductID, req.Quantity)
 	}); err != nil {
-		// Create時のErrUniqueConstraintは上のフォールバックで吸収済みだが、
-		// AddItem内部の数量加算(楽観ロック)やその他の競合はここで409に変換する
-		// (global-constraints.md/mysql/user.goの規約)。
 		if errors.Is(err, errors.ErrUniqueConstraint) || errors.Is(err, errors.ErrOptimisticLockConflict) {
 			return errors.MakeConflictError(ctx, "cart update conflict")
 		}
@@ -154,8 +134,6 @@ func (h *cartHandler) AddItem(c *echo.Context) error {
 	return c.JSON(http.StatusOK, response.FromCart(updated))
 }
 
-// UpdateItem はログイン中ユーザーのカート内商品の数量を変更する。
-// カート、または対象の明細が存在しない場合は404、在庫が不足している場合は422を返す。
 // PUT /api/cart
 func (h *cartHandler) UpdateItem(c *echo.Context) error {
 	ctx := c.Request().Context()
@@ -209,8 +187,6 @@ func (h *cartHandler) UpdateItem(c *echo.Context) error {
 	return c.JSON(http.StatusOK, response.FromCart(updated))
 }
 
-// RemoveItem はログイン中ユーザーのカートから商品を削除する。
-// カート、または対象の明細が存在しない場合は404を返す。
 // DELETE /api/cart
 func (h *cartHandler) RemoveItem(c *echo.Context) error {
 	ctx := c.Request().Context()
@@ -250,7 +226,6 @@ func (h *cartHandler) RemoveItem(c *echo.Context) error {
 	return c.JSON(http.StatusOK, response.FromCart(updated))
 }
 
-// quantityOf はカート内の指定商品の数量を返す。無ければ0を返す。
 func quantityOf(c *cart.Cart, productID string) int {
 	for _, item := range c.Items {
 		if item.ProductID == productID {

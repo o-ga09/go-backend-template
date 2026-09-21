@@ -2,7 +2,6 @@ package response
 
 import "github.com/o-ga09/go-backend-template/internal/domain/product"
 
-// Product はクライアントに返す商品情報。
 type Product struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -11,7 +10,6 @@ type Product struct {
 	Stock       int    `json:"stock"`
 }
 
-// FromProduct はdomain.ProductからレスポンスのProductを組み立てる。
 func FromProduct(p *product.Product) Product {
 	return Product{
 		ID:          p.ID,
@@ -22,7 +20,6 @@ func FromProduct(p *product.Product) Product {
 	}
 }
 
-// FromProducts はdomain.Productのスライスからレスポンスのスライスを組み立てる。
 func FromProducts(ps []*product.Product) []Product {
 	res := make([]Product, 0, len(ps))
 	for _, p := range ps {

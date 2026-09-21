@@ -16,10 +16,6 @@ import (
 	"github.com/o-ga09/go-backend-template/pkg/errors"
 )
 
-// orderHandler は注文リソース(/api/orders)に関するエンドポイントを扱う。
-// カートからの注文確定は複数リポジトリ(cart/product/order)を組み合わせるが、
-// 外部API呼び出しや暗号化を伴わないため、architecture.mdの例外(service層)には
-// 該当しない。usecase層を挟まずハンドラが直接domainのリポジトリを呼び出す。
 // 注文操作は全て認証必須で、常にログイン中ユーザー本人の注文のみを対象とする。
 type orderHandler struct {
 	orderRepo   order.IOrderRepository
@@ -28,24 +24,18 @@ type orderHandler struct {
 	txManager   database.ITransactionManager
 }
 
-// IOrder はorderHandlerの公開インターフェース。
 type IOrder interface {
 	Create(c *echo.Context) error
 	List(c *echo.Context) error
 	GetByID(c *echo.Context) error
 }
 
-// NewOrderHandler はorderHandlerを生成する。
 func NewOrderHandler(orderRepo order.IOrderRepository, cartRepo cart.ICartRepository, productRepo product.IProductRepository, txManager database.ITransactionManager) IOrder {
 	return &orderHandler{orderRepo: orderRepo, cartRepo: cartRepo, productRepo: productRepo, txManager: txManager}
 }
 
-// Create はログイン中ユーザーのカートから注文を確定する。カートが未作成/空の場合、
-// またはカート内商品の在庫が不足している場合は422を返す。カート内商品が既に
-// 削除されている場合は404を返す。商品検索・バリデーションはトランザクション外で
-// 行い、orders/order_itemsへの書き込みとカートのクリアのみをITransactionManager.
-// RunInTxでラップする(transaction.md「外部API呼び出しとトランザクションを
-// 重ねない」、「ハンドラから直接呼ぶ場合」パターン)。
+// 商品検索・バリデーションはトランザクション外で行い、書き込みとカートのクリアのみを
+// RunInTxでラップする。
 // POST /api/orders
 func (h *orderHandler) Create(c *echo.Context) error {
 	ctx := c.Request().Context()
@@ -114,9 +104,6 @@ func (h *orderHandler) Create(c *echo.Context) error {
 	return c.JSON(http.StatusCreated, response.FromOrder(o))
 }
 
-// List はログイン中ユーザーの注文履歴を取得する。
-// requesterID(ログイン中ユーザーのID)以外をクエリパラメータ等で受け取らないため、
-// 他ユーザーの注文履歴を取得することはできない。
 // GET /api/orders
 func (h *orderHandler) List(c *echo.Context) error {
 	ctx := c.Request().Context()
@@ -134,8 +121,6 @@ func (h *orderHandler) List(c *echo.Context) error {
 	return c.JSON(http.StatusOK, response.FromOrders(os))
 }
 
-// GetByID はログイン中ユーザー本人の注文詳細を取得する。存在しない場合は404、
-// 他ユーザーの注文の場合は403を返す。
 // GET /api/orders/:id
 func (h *orderHandler) GetByID(c *echo.Context) error {
 	ctx := c.Request().Context()

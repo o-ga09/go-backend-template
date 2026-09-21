@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	"github.com/newmo-oss/ergo"
+	"gorm.io/gorm"
+
 	"github.com/o-ga09/go-backend-template/pkg/logger"
 )
 
@@ -52,7 +54,9 @@ var (
 	ErrInvalidULID = ergo.New("invalid ulid")
 
 	// データベースエラー
-	ErrRecordNotFound         = ergo.New("record not found")
+	// ErrRecordNotFound はgorm.ErrRecordNotFoundそのもの。mysqlパッケージの
+	// リポジトリはこれを個別に変換せずそのまま返す(coding-style.md参照)。
+	ErrRecordNotFound         = gorm.ErrRecordNotFound
 	ErrConflict               = ergo.New("conflict")
 	ErrOptimisticLockConflict = ergo.New("optimistic lock conflict")
 	ErrForeignKeyConstraint   = ergo.New("foreign key constraint error")

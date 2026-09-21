@@ -70,6 +70,7 @@ pnpm format
 | `request-validation.md` | リクエスト型のバインド（`c.Bind` + `param`/`query`/`json` タグ）・`go-validator/v10` によるバリデーション（`ja` タグでエラーメッセージを日本語化）、リクエスト型のコメント方針 |
 | `testing.md` | Go / フロントエンドのテスト方針（テーブル駆動テスト、モック方針） |
 | `frontend.md` | Next.js のディレクトリ構成、データフェッチ（TanStack Query）、認証、禁止事項 |
+| `coding-style.md` | 関数コメントは最小限にする方針、GORMクエリの書き方（`GetDBFromCtx`は`WithContext`込み、不要な変数代入をしない、`Preload`の使用） |
 
 **個別のプロダクト要件・ADR があればそちらを優先する。** ルールは実装の作法を決めるものであり、要件を上書きしない。
 

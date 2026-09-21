@@ -1,6 +1,3 @@
-// Package product は商品ドメイン(エンティティ + リポジトリinterface)を定義する。
-// 商品一覧・詳細取得は認証不要の公開APIとして提供される
-// (backend/tmp/task-2-brief.md参照)。
 package product
 
 import (
@@ -11,8 +8,6 @@ import (
 
 //go:generate go run github.com/matryer/moq@latest -out mock/product_repository_mock.go -pkg moq . IProductRepository
 
-// Product は商品ドメインエンティティ。domain＝DBモデルの方針に従い、
-// GORMモデルを兼ねる(internal/database/mysql.productRepository経由で永続化される)。
 type Product struct {
 	model.BaseModel
 	Name        string `gorm:"column:name"`
@@ -21,24 +16,16 @@ type Product struct {
 	Stock       int    `gorm:"column:stock"`
 }
 
-// TableName はGORMが使用するテーブル名を明示する。
 func (Product) TableName() string {
 	return "products"
 }
 
-// IProductRepository は商品ドメインの永続化用インターフェース。
-// 実装はinternal/database/mysql.productRepository(GORM)。
 // 商品の作成/更新は本Issue(#4)のスコープ外だが、注文確定に伴う在庫減算
-// (DecreaseStock)のみ例外として持つ(在庫管理そのものは本ドメインの責務)。
+// (DecreaseStock)のみ例外として持つ。
 type IProductRepository interface {
-	// FindByID はIDで商品を検索する。見つからない場合はerrors.ErrRecordNotFoundを返す。
 	FindByID(ctx context.Context, id string) (*Product, error)
-	// List は商品を全件取得する。ページングは今回不要(YAGNI)。
 	List(ctx context.Context) ([]*Product, error)
-	// DecreaseStock は指定数量だけ在庫を減算する。「stock >= quantity」を満たす
-	// 場合のみ更新する条件付きUPDATEで実装するため、注文確定前の事前チェックと
-	// この呼び出しの間に他の注文が割り込んでも(TOCTOU)在庫がマイナスになることは
-	// ない。在庫が不足している場合はerrors.ErrInsufficientStockを返す。
-	// 注文確定処理からITransactionManager.RunInTx内で呼ばれる想定。
+	// 条件付きUPDATE(stock >= quantity)で実装するため、事前チェック(HasStock)との
+	// 間の競合(TOCTOU)でも在庫はマイナスにならない。在庫不足時はerrors.ErrInsufficientStock。
 	DecreaseStock(ctx context.Context, productID string, quantity int) error
 }

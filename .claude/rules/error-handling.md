@@ -196,6 +196,37 @@ if errors.Is(err, errors.ErrRecordNotFound) {
 }
 ```
 
+### `mysql` パッケージでNotFoundを個別に変換しない 🔴
+
+`pkg/errors.ErrRecordNotFound` は `gorm.ErrRecordNotFound` そのものを指す
+（`pkg/errors/errors.go`）。GORMの`First`/`Take`等が返す`gorm.ErrRecordNotFound`は
+そのまま`errors.ErrRecordNotFound`として扱えるため、`internal/database/mysql/`の
+各リポジトリメソッドで`stderrors.Is(err, gorm.ErrRecordNotFound)`を判定して
+独自エラーに変換する必要はない。エラーはそのまま呼び出し元に返す。
+
+```go
+// 誤: リポジトリメソッドごとに変換の分岐を書く(不要な重複)
+if err := db.Where("id = ?", id).First(&p).Error; err != nil {
+    if stderrors.Is(err, gorm.ErrRecordNotFound) {
+        return nil, pkgerrors.ErrRecordNotFound
+    }
+    return nil, err
+}
+
+// 正: そのまま返す(呼び出し元はerrors.Is(err, errors.ErrRecordNotFound)で判定できる)
+if err := db.Where("id = ?", id).First(&p).Error; err != nil {
+    return nil, err
+}
+```
+
+一意制約違反（MySQL固有のエラー番号1062）のような、GORMより下のドライバ層の
+エラーを判定する変換（`isDuplicateEntryErr` → `errors.ErrUniqueConstraint`）は
+引き続きリポジトリ側で行う（ドライバ固有の型を上位レイヤーに漏らさないため。
+`architecture.md`「external/<name>/はSDK型をdomainやserverに漏らさない」と同じ理由）。
+楽観ロック競合（`ErrOptimisticLockConflict`）の判定も同様の理由で
+`internal/database/mysql/base_model_plugin.go`に集約済みで、各リポジトリでは
+判定しない。
+
 ## handler でのエラー変換
 
 - Echo handler では `errors.GetCode(err)` で HTTP ステータスを取得してレスポンスに変換する

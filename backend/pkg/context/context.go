@@ -57,7 +57,7 @@ func GetDBFromCtx(ctx context.Context) *gorm.DB {
 	if !ok {
 		return nil
 	}
-	return db
+	return db.WithContext(ctx)
 }
 
 // SetUserID はセッション検証済みのユーザーIDをcontextに格納する。

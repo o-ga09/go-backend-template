@@ -88,7 +88,7 @@ func TestCartHandler_Get(t *testing.T) {
 
 func TestCartHandler_Get_リクエスト主体の識別子で自分のカートのみ取得する(t *testing.T) {
 	// カートIDをリクエストから受け取らない設計のため、requesterID以外のカートを
-	// 直接指定して取得することはできない(global-constraints.md/task-3-brief.md)。
+	// 直接指定して取得することはできない。
 	cartRepo := &cartmoq.ICartRepositoryMock{
 		FindByUserIDFunc: func(ctx context.Context, userID string) (*cart.Cart, error) {
 			c := &cart.Cart{UserID: userID}

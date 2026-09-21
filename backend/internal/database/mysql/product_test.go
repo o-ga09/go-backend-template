@@ -12,9 +12,7 @@ import (
 	"github.com/o-ga09/go-backend-template/pkg/uuid"
 )
 
-// insertTestProduct はproductsテーブルへ直接SQLでテストデータをinsertする
-// (productドメインには本Issue(#4)スコープ外のCreateが無いため。
-// backend/tmp/task-2-brief.md参照)。
+// productドメインにはCreateが無いため、テストデータは直接SQLでinsertする。
 func insertTestProduct(t *testing.T, ctx context.Context, name, description string, priceYen, stock int) *product.Product {
 	t.Helper()
 	return insertTestProductAt(t, ctx, name, description, priceYen, stock, time.Now())
