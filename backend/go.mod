@@ -13,6 +13,7 @@ require (
 	github.com/newmo-oss/ergo v0.1.0
 	github.com/rubenv/sql-migrate v1.8.1
 	go.opentelemetry.io/otel/trace v1.34.0
+	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.1
 )
